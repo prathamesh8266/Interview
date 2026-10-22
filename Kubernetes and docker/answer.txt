@@ -1,0 +1,320 @@
+SECTION 2: KUBERNETES AND DOCKER
+Interview approaches for questions 11–18
+
+These are prepared interview answers, not claims about incidents you personally
+handled. Explain the reasoning in your own words and add experience only when
+it is true. Commands are examples: replace namespace, resource and container
+placeholders and confirm the current cluster context before using them.
+Official reference links are included in the interactive page.
+
+
+QUESTION 11
+A pod is in CrashLoopBackOff. How would you troubleshoot it?
+
+CANDIDATE ANSWER
+
+I would first confirm the namespace, affected workload and business impact.
+CrashLoopBackOff describes repeated container restarts with a delay between
+attempts; it is a symptom, not the root cause or a Pod phase.
+
+I would describe the Pod and inspect events, restart counts and the last
+termination reason. I would check the failing container's current and previous
+logs, because a previous container instance may contain the useful error.
+For a multi-container Pod, I would specify the container name and check init
+containers too.
+
+The evidence would guide the next step. An application exception may indicate
+missing configuration or a startup bug. I would compare the image, command,
+arguments, required ConfigMap or Secret references, file permissions and recent
+changes. I would also check for dependency errors, OOMKilled and failed startup
+or liveness probes. A failed readiness probe alone does not restart a container.
+
+I would correct the evidenced cause through the workload's deployment process.
+For a release regression, I would consider a known-good compatible version.
+Repeatedly deleting the Pod would not fix a persistent configuration or code
+problem, so I would preserve evidence before replacing anything.
+
+I would verify that restarts stop increasing, readiness succeeds and the actual
+user flow works. Then I would add the missing test, validation or monitoring.
+
+USEFUL CHECKS
+kubectl config current-context
+kubectl get pods -n <namespace> -o wide
+kubectl describe pod <pod> -n <namespace>
+kubectl logs <pod> -n <namespace> -c <container> --tail=100
+kubectl logs <pod> -n <namespace> -c <container> --previous --tail=100
+
+KEY POINT TO REMEMBER
+Read the termination reason and previous logs before choosing the fix.
+
+
+QUESTION 12
+A pod is running, but the application cannot be accessed through its URL. What would you check?
+
+CANDIDATE ANSWER
+
+I would distinguish Running from Ready and confirm the exact URL, error,
+affected users and request time. A process can be running while it cannot
+serve traffic or is not selected by the Service.
+
+I would trace the path: client DNS and TLS, load balancer, ingress controller,
+Ingress rule, Service, ready Pod endpoint and application listener. I would
+check the host and path rule, ingress class and controller health. An Ingress
+object needs a controller to implement it.
+
+At the Service, I would compare its selector with Pod labels and inspect
+EndpointSlices. Missing usable endpoints can indicate a selector mismatch or
+Pods that are not ready. I would compare Service port and targetPort with the
+port on which the application actually listens. Declaring containerPort alone
+does not start a listener or expose the application externally.
+
+I would test the Pod and Service from an appropriate in-cluster environment,
+then compare with the external URL. The application must listen on an interface
+reachable through the Pod IP, not only loopback. I would check policies, routing
+and firewalls at the point where the request stops working. A port-forward can
+help isolate application behavior, but it does not prove the normal ingress
+or Service path works.
+
+After correcting the failing layer, I would verify the original URL and the
+affected user flow, not just a health endpoint.
+
+USEFUL CHECKS
+kubectl get pods -n <namespace> -o wide
+kubectl get service <service> -n <namespace> -o yaml
+kubectl get endpointslices -n <namespace> -l kubernetes.io/service-name=<service>
+kubectl describe ingress <ingress> -n <namespace>
+
+KEY POINT TO REMEMBER
+Follow the request path and prove which hop fails.
+
+
+QUESTION 13
+What causes Pending, ImagePullBackOff, and OOMKilled, and how would you investigate each?
+
+CANDIDATE ANSWER
+
+I would separate these conditions because they occur at different points in
+starting or running a workload. Pod events and container status are my starting
+evidence, rather than treating every symptom as a reason to restart.
+
+Pending is a Pod phase covering time before containers are ready to run,
+including scheduling and image setup. For an unscheduled Pod, I would inspect
+FailedScheduling events, resource requests versus available allocatable
+capacity, node selectors, affinity, taints and tolerations. I would also check
+persistent-volume claims and volume-related events. I would fix the specific
+capacity, placement or storage constraint instead of blindly lowering requests.
+
+ImagePullBackOff means an image pull failed and Kubernetes is delaying retries.
+I would read the pull error and check the registry, repository, tag or digest,
+image availability, registry authentication and imagePullSecrets, plus network,
+DNS and certificate access from the nodes. A successful pull on my laptop does
+not establish that a cluster node can pull it. I would also check image platform
+compatibility where relevant.
+
+OOMKilled is a container termination reason. I would inspect the last state,
+memory limit, workload and historical memory trend to determine whether the
+container exceeded its limit or encountered broader node memory pressure.
+Exit code 137 alone is not proof of an OOM. I would investigate leaks, unusually
+large input and concurrency, then tune the workload or capacity using evidence.
+Node-pressure eviction is a separate condition to investigate.
+
+Finally, I would verify scheduling, image startup or memory stability according
+to the original failure and confirm application requests succeed.
+
+USEFUL CHECKS
+kubectl describe pod <pod> -n <namespace>
+kubectl get pvc -n <namespace>
+kubectl describe node <node>
+kubectl top pod <pod> -n <namespace> --containers
+
+kubectl top needs the metrics API and is a current sample; historical monitoring
+is needed for spikes that happened before the container restarted.
+
+KEY POINT TO REMEMBER
+Pending is a phase; ImagePullBackOff is a waiting reason; OOMKilled is a termination reason.
+
+
+QUESTION 14
+Explain readiness, liveness, and startup probes. What happens when each fails?
+
+CANDIDATE ANSWER
+
+Readiness asks whether the container can serve requests now. When readiness
+fails according to its thresholds, the Pod becomes not ready and is normally
+excluded from ready Service backends. The container keeps running; readiness
+failure does not itself restart it.
+
+Liveness asks whether the application is stuck in a state that restarting the
+container can recover. Repeated failure to the configured threshold causes
+the kubelet to terminate the container and apply its restart policy. For a
+Deployment workload, that normally results in a restart.
+
+A startup probe gives a slow-starting application time to initialize. When
+configured, readiness and liveness checks wait until startup succeeds. If
+startup does not succeed within the configured failure budget, the container
+is terminated and its restart policy applies. Once startup succeeds, the
+ongoing readiness and liveness checks take over.
+
+I would choose meaningful, inexpensive endpoints and configure the path, port,
+timeout, interval and failure threshold for the application's behavior. I would
+avoid making liveness depend on a temporarily unavailable external database,
+because restarting every replica could worsen the incident. Readiness should
+reflect whether this instance can usefully serve the traffic it receives.
+
+I would test slow startup, temporary unavailability and an unrecoverable stuck
+process to verify that traffic removal and restarts happen as intended.
+
+KEY POINT TO REMEMBER
+Readiness controls traffic; liveness controls recovery by restart; startup protects initialization.
+
+
+QUESTION 15
+Explain Kubernetes requests and limits. What happens when a container exceeds its memory or CPU limit?
+
+CANDIDATE ANSWER
+
+A request tells the scheduler the resource requirement it should account for
+when placing a Pod. CPU requests also influence the container's share of CPU
+when there is contention. A request is not a maximum: a container can use more
+when resources are available and its limits allow it.
+
+A CPU limit constrains how much CPU time the container can use. Trying to use
+more typically results in throttling, which can increase latency or cause
+timeouts. Exceeding a CPU limit does not itself mean the container is killed.
+
+A memory limit is enforced differently. Allocations beyond the limit can
+trigger an out-of-memory kill. The container can then restart according to its
+restart policy. Memory usage above its request alone does not automatically
+mean it will be killed, although node memory pressure can cause eviction.
+
+For example, a CPU request of 250m means one quarter of a CPU, while a limit
+of 1000m means one CPU. Mi and Gi are binary memory units, so I would be careful
+with units and inspect the effective Pod configuration, including defaults
+injected by namespace policy.
+
+I would size requests and limits from observed demand, peaks and application
+behavior. I would correlate latency with throttling and inspect memory trends,
+termination reasons and node pressure. A higher limit may relieve a genuine
+capacity problem, but it does not fix a leak or guarantee node capacity.
+
+KEY POINT TO REMEMBER
+Requests guide placement; CPU limits throttle; memory limits can lead to OOM termination.
+
+
+QUESTION 16
+How do Deployment, Service, Ingress, ConfigMap, and Secret work together?
+
+CANDIDATE ANSWER
+
+A Deployment declares the desired application Pod template and replica count.
+It manages ReplicaSets that maintain the Pods and supports controlled updates.
+The template references the image, resource settings, probes and configuration.
+
+A Service gives a stable way to reach a changing set of Pods. For a typical
+selector-based Service, its selectors match Pod labels, and EndpointSlices
+describe the backend endpoints. Its port maps to the targetPort used by the
+application. An ordinary ClusterIP Service is internal to the cluster.
+
+An Ingress defines HTTP or HTTPS host and path rules that route to Services.
+An ingress controller implements those rules; the resource alone does not
+provide a working external entry point. DNS, TLS and the controller's exposure
+must also be configured. Ingress is still supported but its API is frozen;
+Gateway API is the direction for new networking capabilities.
+
+A ConfigMap supplies non-sensitive configuration, and a Secret supplies
+sensitive values such as credentials. Pods can consume them as environment
+variables or mounted files. Base64 encoding of Secret data is not encryption;
+access control, encryption at rest and careful handling still matter.
+
+Environment variables already set in a running container do not automatically
+change when the ConfigMap changes. Normal mounted configuration can update
+eventually, but the application must reload it; subPath mounts have update
+limitations. I would use a deliberate rollout or a supported reload strategy.
+
+I explain the request path as client → ingress controller and rules → Service
+→ ready Pod, while the Deployment manages the Pods and ConfigMap/Secret
+references provide runtime configuration.
+
+KEY POINT TO REMEMBER
+Deployment manages Pods; Service connects them; Ingress routes HTTP; configuration is injected separately.
+
+
+QUESTION 17
+How do you perform and verify a rolling update? How would you roll it back?
+
+CANDIDATE ANSWER
+
+Before a rolling update, I would confirm the cluster and namespace, review the
+change and use a traceable image version, preferably a digest. I would check
+capacity for old and new replicas to coexist, readiness behavior, compatibility
+with configuration and database changes, and the intended rollout settings.
+
+For a Deployment using RollingUpdate, maxSurge controls extra Pods above the
+desired count and maxUnavailable controls allowed unavailability during the
+transition. For example, maxUnavailable of 0 and maxSurge of 1 can keep the
+desired availability when sufficient capacity and healthy readiness exist;
+it does not by itself guarantee zero failed user requests.
+
+I would apply the reviewed manifest through the normal release process and
+watch rollout status, Pods, events and readiness. I would then exercise the
+actual user flow and check errors, latency and dependency behavior. A completed
+rollout is useful evidence, but business behavior still needs validation.
+
+If significant failures point to the new release and no quick safe fix exists,
+I would inspect rollout history and select a retained known-good revision.
+After confirming schema and configuration compatibility, I could use rollout
+undo to restore that Deployment Pod template, then verify recovery again.
+
+Undo does not reverse a database migration or separately changed ConfigMaps
+and Secrets. A progress deadline reports a stalled rollout; the Deployment
+controller does not automatically roll it back. If GitOps or another release
+controller owns the resource, I would coordinate the desired-state change so
+it does not immediately reapply the faulty version.
+
+COMMAND CUES
+kubectl diff -n <namespace> -f deployment.yaml
+kubectl apply -n <namespace> -f deployment.yaml
+kubectl rollout status deployment/<deployment> -n <namespace> --timeout=120s
+kubectl rollout history deployment/<deployment> -n <namespace>
+kubectl rollout undo deployment/<deployment> -n <namespace> --to-revision=<revision>
+
+These are interview examples. Apply and undo change a workload and should follow
+the environment's reviewed release process.
+
+KEY POINT TO REMEMBER
+Validate user behavior after rollout or rollback, and check compatibility before undo.
+
+
+QUESTION 18
+A Docker container works locally but fails in Kubernetes. What differences would you investigate?
+
+CANDIDATE ANSWER
+
+I would first make sure I am comparing the same artifact. I would compare the
+image digest and platform, rather than trusting that a mutable tag means the
+same image. I would inspect the Kubernetes events, container state and logs to
+see whether the failure is pulling, starting, serving traffic or a later error.
+
+Next, I would compare the effective runtime settings. Docker options or Compose
+may supply environment variables, local files and bind mounts that are absent
+in Kubernetes. I would compare ConfigMaps, Secret references, mounted paths,
+working directory and the command and arguments that override image defaults.
+
+Networking is another common difference. A published Docker host port is not
+the same as a Kubernetes Service or Ingress. Inside a Pod, localhost refers to
+that Pod's network namespace, not my laptop or a database in another Pod.
+I would check the listener interface, Service targetPort, DNS names, network
+policies and dependency access from the failing environment.
+
+I would also compare the runtime user, file ownership, read-only filesystem,
+security context, service-account permissions, resource requests and limits,
+and the configured probes. A workload that runs as root with no local memory
+limit may fail under stricter permissions or constrained memory in the cluster.
+
+I would reproduce the relevant difference with the same image and comparable
+settings, correct the evidenced mismatch, and verify the original cluster URL
+and workload behavior. I would improve environment parity and release tests
+instead of assuming Kubernetes requires rebuilding an otherwise correct image.
+
+KEY POINT TO REMEMBER
+Same image is only one part of parity: configuration, network, storage, security and resources also matter.

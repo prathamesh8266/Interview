@@ -1,0 +1,80 @@
+1. Production support and troubleshooting — highest priority
+    1. ⭐ A production application suddenly becomes unavailable. How would you investigate and restore service?
+    2. ⭐ A deployment succeeds, but users start receiving errors. How do you troubleshoot, and when would you roll back?
+    3. ⭐ Describe a production incident you handled: impact, investigation, resolution, and prevention.
+    4. An application becomes slow without any recent deployment. What would you check?
+    5. How do you distinguish an application issue from a database, network, or infrastructure issue?
+    6. What is the difference between incident resolution, a workaround, and root-cause analysis?
+    7. How do you prioritize multiple incidents and decide when to escalate?
+    8. What would you include in an RCA document?
+    9. How would you investigate an intermittent issue that you cannot reproduce?
+    10. How do you communicate status to developers, business stakeholders, and onshore teams during an outage?
+2. Kubernetes and Docker
+    11. ⭐ A pod is in CrashLoopBackOff. How would you troubleshoot it?
+    12. ⭐ A pod is running, but the application cannot be accessed through its URL. What would you check?
+    13. What causes Pending, ImagePullBackOff, and OOMKilled, and how would you investigate each?
+    14. Explain readiness, liveness, and startup probes. What happens when each fails?
+    15. Explain Kubernetes requests and limits. What happens when a container exceeds its memory or CPU limit?
+    16. How do Deployment, Service, Ingress, ConfigMap, and Secret work together?
+    17. How do you perform and verify a rolling update? How would you roll it back?
+    18. A Docker container works locally but fails in Kubernetes. What differences would you investigate?
+3. Jenkins, Git, and release management
+    19. ⭐ Explain an end-to-end CI/CD pipeline you implemented, from commit to production.
+    20. ⭐ How would you build a Jenkins pipeline to test code, build an image, scan it, push it to a registry, and deploy to Kubernetes?
+    21. What are Jenkins controllers, agents, stages, and a Jenkinsfile?
+    22. How do you manage credentials in Jenkins and prevent secrets from appearing in logs?
+    23. A pipeline worked yesterday and fails today without code changes. How would you investigate?
+    24. How do you promote the same application version across development, testing, and production?
+    25. Explain git merge, rebase, revert, and reset. Which would you use to undo a commit on a shared branch?
+    26. How do rolling, blue-green, and canary deployments differ? When would you choose each?
+4. Azure, infrastructure, and Terraform
+    27. ⭐ Explain the architecture of an Azure application you supported, including networking, AKS, registry, databases, and secrets.
+    28. ⭐ An application in AKS cannot connect to a database through a private endpoint. How would you investigate?
+    29. How do you manage configuration and infrastructure differences across environments?
+    30. How do managed identities, service principals, RBAC, and Key Vault fit into deployment automation?
+    31. What is Terraform state? How do you secure it, handle locking, and manage drift?
+    32. Why did you use separate Terraform state files for different resources? What are the benefits and tradeoffs?
+    33. A Terraform apply partially fails. How would you inspect the result and recover safely?
+5. Python, Linux, networking, and monitoring
+    34. ⭐ Write a Python script that checks multiple application health endpoints and reports failures, with timeouts and exception handling.
+    35. ⭐ A Linux server has high CPU, high memory usage, or a full disk. How would you investigate each?
+    36. Write a Python script to parse application logs and count errors by type or time interval.
+    37. How would you implement retries in an automation script? Which failures should you avoid retrying?
+    38. How do you investigate DNS resolution failures, connection timeouts, connection refusals, and TLS certificate errors?
+    39. What do HTTP 401, 403, 404, 500, 502, 503, and 504 suggest during troubleshooting?
+    40. Which metrics and alerts would you configure for an application? How would you reduce noisy alerts?
+6. MYGAIT+ and developer platform support
+    41. ⭐ You are assigned an unfamiliar developer platform. How would you learn it and become effective at supporting it?
+    42. A developer reports, “The platform is not working.” What information would you collect before investigating?
+    43. How would you distinguish incorrect platform usage, an environment issue, and a product defect?
+    44. How would you prepare a five-minute feature demo or proof of concept? What would you do if it failed during the presentation?
+    45. How would you turn a recurring developer issue into documentation, a runbook, or an automation improvement?
+    The JD does not describe MYGAIT+ internals, so prepare your approach to learning and supporting it. Be clear about any direct experience you do or do not have.
+7. Your experience and behavioral questions
+    46. ⭐ Tell me about yourself and why your experience fits this production support and DevOps role.
+    47. Explain your Azure Pipelines and Terraform automation: the original problem, your design, your contribution, and the result.
+    48. How have you integrated vulnerability scanning and protected secrets, deployment credentials, and Terraform state?
+    49. Describe a technical walkthrough or client demo you delivered, including your GenAI work. How did you explain the architecture and handle questions?
+    50. Tell me about a mistake, a disagreement during troubleshooting, or a task with unclear requirements. How did you handle it?
+
+
+| Time | Focus |
+|---|---|
+| 90 minutes | Production incidents and Kubernetes troubleshooting |
+| 60 minutes | Your pipeline explanation, Jenkins basics, Git, and rollback |
+| 45 minutes | Azure networking, private endpoints, Terraform state |
+| 45 minutes | Python exercises, Linux commands, HTTP and DNS troubleshooting |
+| 30 minutes | Introduction, platform learning approach, demo and stakeholder examples |
+
+Prepare four concrete stories: a production incident, an automation improvement, a deployment or Kubernetes change, and a client demo. For each, explain the problem, your actions, the result, and what you improved afterward.
+For troubleshooting questions, practice answering in this order: impact → recent changes → evidence → isolate the cause → restore service → verify recovery → prevent recurrence.
+
+Also revise these small gaps:Linux permissions and processes, Kubernetes RBAC, application monitoring with Prometheus/Grafana, and SLA/SLO/SLI plus incident severity.
+
+For a DevSecOps interview, know these core areas:
+- SAST — scans source code for security issues without running it. Tools: SonarQube, Checkmarx.
+- DAST — tests a running application for vulnerabilities. Tools: OWASP ZAP, Burp Suite.
+- SCA — scans third-party/open-source dependencies and licenses. Tools: Snyk, Mend.
+- Container scanning — scans container images/OS packages for CVEs. Tools: Trivy, Prisma Cloud.
+- IaC scanning — scans Terraform/Kubernetes manifests for misconfigurations. Tools: Checkov, tfsec.
+- Secret scanning — detects passwords, tokens, API keys committed to code. Tools: Gitleaks, GitHub secret scanning.

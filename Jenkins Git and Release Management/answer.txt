@@ -1,0 +1,328 @@
+SECTION 3: JENKINS, GIT AND RELEASE MANAGEMENT
+Interview preparation for questions 19–26
+
+These are prepared explanations and approaches, not claims of personal Jenkins
+experience. Question 19 is an experience template: replace bracketed details
+with facts from a pipeline you actually implemented. Keep team work separate
+from your contribution. Example commands and snippets are revision material,
+not actions to run against production without the normal release process.
+Official references are linked in the interactive page.
+
+
+QUESTION 19
+Explain an end-to-end CI/CD pipeline you implemented, from commit to production.
+
+CANDIDATE ANSWER TEMPLATE — COMPLETE WITH YOUR ACTUAL EXPERIENCE
+
+In [project/application], the original problem was [manual steps, release
+inconsistency or another real issue]. I worked on [your actual responsibility]
+using [the CI/CD platform you really used].
+
+A commit or reviewed merge to [actual branch] triggered the pipeline. It checked
+out the relevant revision and ran [actual checks and tests]. It then produced
+[actual deployable artifact, such as a container image]. The release recorded
+the source commit, build identity and artifact version or digest so we could
+trace what was deployed.
+
+The artifact went through [actual test environments and validation]. Environment
+configuration and credentials were supplied separately through [actual method].
+Production promotion used [actual approval or release gate] and [actual deployment
+strategy]. We verified the release using [actual smoke tests, user flows and
+monitoring]. If validation failed, our recovery approach was [the real rollback
+or forward-fix procedure and compatibility checks].
+
+My specific contribution was [implementation, troubleshooting or ownership you
+can explain]. The observed result was [a factual outcome]. I would give numbers
+only if I had evidence for them, and describe the improvement qualitatively
+otherwise. One lesson or improvement was [what actually changed afterward].
+
+If the implementation used Azure Pipelines or another platform rather than
+Jenkins, say so. You can then explain how its jobs, agents and stages map to
+Jenkins concepts, while distinguishing implementation experience from knowledge.
+
+DETAILS TO CONFIRM
+- Application, problem, architecture and real CI/CD platform.
+- Actual trigger, tests, security gates, artifact and environment flow.
+- Credential/configuration handling, production approval and recovery process.
+- Your contribution, verification and observed outcome.
+
+KEY POINT TO REMEMBER
+Tell a factual project story: problem → pipeline flow → your contribution → verified outcome.
+
+
+QUESTION 20
+How would you build a Jenkins pipeline to test code, build an image, scan it, push it to a registry, and deploy to Kubernetes?
+
+CANDIDATE ANSWER
+
+I would keep a reviewed Jenkinsfile in source control and run the work on a
+suitable trusted agent with the required build, test, scanning and deployment
+tools. I would define the stages and their failure behavior explicitly.
+
+First, I would check out the triggering revision, install locked dependencies
+and run the project's tests. I would publish test results even on failure, while
+preventing a failed or disallowed unstable build from reaching deployment.
+
+Next, I would build the container image once with a traceable release identifier.
+I would scan that image and retain the report. For example, a vulnerability
+policy might block HIGH and CRITICAL findings; the actual policy and exceptions
+must be agreed. A scanner error must not be treated as a clean result. Source,
+dependency and secret checks can complement the image scan.
+
+After the gates pass, I would authenticate using narrowly scoped credentials,
+push the tested image and record the registry digest. Deployment would reference
+that digest so we deploy the artifact that passed validation, with configuration
+and credentials supplied for the target environment.
+
+I would deploy first to the required non-production environment, verify it, then
+use the approved production gate and deployment strategy. I would watch rollout
+status and test the real user flow and monitoring. A failed deployment would
+follow an explicit recovery plan after checking data and schema compatibility.
+
+I would add timeouts, reports, cleanup and notification handling, and serialize
+changes to the same environment across relevant jobs. A job-level concurrency
+setting alone may not prevent a different job from deploying simultaneously.
+
+COMMAND CUES — ADAPT TO THE AGENT AND PROJECT
+docker build -t <registry>/<repository>:<release-id> .
+trivy image --exit-code 1 --severity HIGH,CRITICAL <registry>/<repository>:<release-id>
+docker push <registry>/<repository>:<release-id>
+kubectl rollout status deployment/<deployment> -n <namespace> --timeout=120s
+
+These illustrate a Docker/Trivy toolchain, not mandatory Jenkins tools. Login,
+digest capture and the reviewed deployment manifest are separate required parts
+of the real implementation. Shell examples assume the selected agent supports them.
+
+KEY POINT TO REMEMBER
+Test → build once → scan → publish → deploy the verified digest → verify user behavior.
+
+
+QUESTION 21
+What are Jenkins controllers, agents, stages, and a Jenkinsfile?
+
+CANDIDATE ANSWER
+
+The Jenkins controller coordinates Jenkins: it maintains configuration and job
+definitions, schedules work and presents build status. I would avoid running
+normal application builds on its built-in node, because those builds can have
+the same filesystem access as the controller process.
+
+An agent is an execution environment connected to Jenkins. It provides the
+workspace and tools needed by a build. Labels let a pipeline request a suitable
+agent, such as one with a particular OS or toolchain. An executor is a slot for
+running work on a node; an agent can have multiple executors, with isolation
+and resource implications.
+
+A stage is a logical group of pipeline work, such as Test, Build, Scan or Deploy.
+It helps organize execution and make failures visible. Steps are the operations
+inside it, such as invoking a shell command or recording test results. Stages
+are commonly sequential, but a pipeline can also define parallel work.
+
+A Jenkinsfile is the pipeline definition stored as text, normally in the same
+source repository so changes can be reviewed and versioned. Jenkins supports
+Declarative and Scripted Pipeline syntax. In a Declarative pipeline, directives
+such as agent, stages, steps, environment, options and post describe execution
+and result handling. The Jenkinsfile orchestrates the project's tools rather
+than replacing its compiler, test runner or deployment tooling.
+
+KEY POINT TO REMEMBER
+Controller coordinates; agents execute; stages organize; Jenkinsfile defines the pipeline as code.
+
+
+QUESTION 22
+How do you manage credentials in Jenkins and prevent secrets from appearing in logs?
+
+CANDIDATE ANSWER
+
+I would store credentials in the appropriate Jenkins credential store or an
+approved secret-manager integration and reference their IDs in the Jenkinsfile.
+I would not commit passwords, tokens or kubeconfig contents to the repository.
+Credentials should have the narrowest useful scope and permissions, with
+separate access for environments where appropriate.
+
+I would bind a credential only around the steps that need it, for example using
+withCredentials. For a shell step, I would avoid Groovy interpolation of secrets
+and let the shell expand the bound environment variable. I would disable shell
+tracing for secret-handling commands and avoid printing the environment, verbose
+HTTP output or command arguments containing credentials. For Docker login,
+password-stdin avoids placing the password directly in a command argument.
+
+Jenkins masking is a useful last line of defense, not a guarantee. Encoded,
+transformed or tool-generated output can still expose sensitive data. I would
+review reports, archived artifacts, temporary files and workspace handling too.
+Secret-file bindings need care so files do not land in browsable workspace paths.
+
+I would keep untrusted pull-request code away from production credentials and
+use appropriately isolated agents. A malicious build or another process with
+access to the same execution environment can read secrets despite masking.
+Rotation, access review and prompt revocation after a suspected leak are part
+of credential management, not just keeping the console visually clean.
+
+PATTERN TO EXPLAIN — UNIX-LIKE AGENT, CREDENTIALS BINDING PLUGIN
+withCredentials([usernamePassword(credentialsId: 'registry-push',
+    usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASSWORD')]) {
+    sh '''
+        set +x
+        printf '%s' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" --username "$REGISTRY_USER" --password-stdin
+    '''
+}
+
+REGISTRY must be configured separately. This is an illustration of binding and
+shell expansion; a full build must also isolate and clean up registry login state.
+
+KEY POINT TO REMEMBER
+Scope and isolate secrets; masking alone is not a security boundary.
+
+
+QUESTION 23
+A pipeline worked yesterday and fails today without code changes. How would you investigate?
+
+CANDIDATE ANSWER
+
+I would identify the first failing stage and exact error, then compare the
+failed build with the last successful one. I would confirm that the source
+revision really is the same, including submodules, shared libraries, parameters
+and the branch or revision used to load the Jenkinsfile.
+
+No application-code change does not mean the inputs are unchanged. I would
+compare agent identity, OS and tool versions, container image digests, plugin or
+Jenkins changes, environment variables, workspace state, disk space and resource
+availability. I would check whether the job is queued for an unavailable agent
+or actually failing after execution starts.
+
+For external systems, I would check dependency repositories, registry access,
+network/DNS/TLS, expired credentials, changed permissions, rate limits and target
+environment health. A newly updated vulnerability database can correctly block
+an unchanged image, so I would inspect the actual finding rather than bypassing
+the security gate.
+
+I would gather focused evidence without printing secrets, then reproduce using
+the known input set or a clean controlled workspace. I would change one variable
+at a time where possible. A bounded retry may help a transient download failure,
+but blindly retrying a deployment or migration can repeat side effects.
+
+After correcting the cause, I would verify the relevant stages and deployment
+behavior. I would improve reproducibility using locked dependencies, pinned
+tools and images where appropriate, and record enough build metadata to make
+the next comparison straightforward.
+
+KEY POINT TO REMEMBER
+Compare all build inputs and external dependencies, not only the application commit.
+
+
+QUESTION 24
+How do you promote the same application version across development, testing, and production?
+
+CANDIDATE ANSWER
+
+I would build the deployable artifact once and promote that artifact through
+the environments. For a container, I would record its immutable registry digest
+and deploy by digest. Rebuilding the same commit separately for each environment
+can produce different bytes if dependencies, base images or tools have changed.
+A mutable tag such as latest is not sufficient proof of artifact identity.
+
+I would keep environment-specific settings outside the image: endpoints,
+resource settings and feature configuration in reviewed environment configuration,
+with secrets supplied by the approved credential mechanism. That lets one image
+run in each environment without embedding production credentials during a build.
+
+Promotion gates would check the required test evidence, security policy and
+environment validation. Production would use the agreed authorization and
+release process. I would record the commit, build, image digest, configuration
+revision and promotion evidence so the deployed state is traceable.
+
+If registries differ, I would verify that copying or publishing the artifact
+preserves the intended manifest digest instead of assuming the destination tag
+identifies identical content. I would retain the previous approved artifact
+and compatible configuration for recovery.
+
+The artifact is only part of a release. I would plan database migrations and
+backward compatibility separately, verify the actual user flow after each
+promotion, and avoid treating an image rollback as a reversal of data changes.
+
+KEY POINT TO REMEMBER
+Build once; promote the verified artifact; vary configuration separately and record the release state.
+
+
+QUESTION 25
+Explain git merge, rebase, revert, and reset. Which would you use to undo a commit on a shared branch?
+
+CANDIDATE ANSWER
+
+Merge integrates another history into the current branch. Depending on the
+history and options, Git may fast-forward the branch pointer or create a merge
+commit. The existing commits are not rewritten just because they are merged.
+
+Rebase reapplies commits onto another base, typically producing new commit IDs
+for the replayed commits. It can keep local feature history linear, but rewriting
+commits that other people already depend on requires coordination. I would not
+rebase shared history casually.
+
+Revert creates a new commit that reverses the changes introduced by a selected
+commit, while preserving the existing history. For an unwanted commit already
+on a shared branch, this is normally my choice, followed by review and tests.
+Conflicts can still occur. Reverting a merge needs a deliberately chosen mainline
+parent and has consequences for later merges, so I would inspect the history.
+
+In its commit form, reset moves the current branch to a selected commit. --soft
+keeps index and working-tree changes; the usual --mixed form resets the index
+while keeping working-tree changes; --hard also resets tracked working-tree
+content and can discard local work. Path-based reset instead updates selected
+index entries without moving the branch. I would inspect status and preserve
+needed work before a potentially destructive operation.
+
+I would therefore use revert for a normal shared-branch undo rather than reset
+plus a force push. A source revert is also different from an operational
+rollback: production changes only when the resulting release process deploys
+the intended artifact, and database compatibility still needs checking.
+
+COMMAND CUES
+git status
+git log --oneline --graph -n 12
+git show <commit>
+git revert <commit>
+
+The last command changes the working tree and normally records a new commit;
+review and test the result through the team's shared-branch workflow.
+
+KEY POINT TO REMEMBER
+Merge integrates; rebase replays; revert adds an undo commit; commit-form reset moves a branch.
+
+
+QUESTION 26
+How do rolling, blue-green, and canary deployments differ? When would you choose each?
+
+CANDIDATE ANSWER
+
+A rolling update gradually replaces old instances with new ones. It is a common
+choice for compatible application changes when I want controlled availability
+without keeping two complete environments for the whole release. Old and new
+versions coexist during the transition, so readiness, capacity and compatibility
+matter. Rolling replacement alone is not a precise traffic-percentage policy.
+
+Blue-green keeps the current and new versions available side by side. I would
+validate the new environment and switch routing when it is ready, retaining the
+old environment for an agreed recovery window. It can provide fast application
+traffic reversal, at the cost of duplicate capacity and careful handling of
+connections, background workers and shared state. Database writes are not
+automatically undone by switching traffic back.
+
+A canary exposes the new version to a limited part of real traffic or a selected
+cohort, then expands exposure if the defined health criteria pass. I would choose
+it when real production behavior is important and I have routing control,
+version-specific observability and enough representative traffic. It needs
+explicit promotion and stop criteria, not just waiting and hoping.
+
+For Kubernetes, a Deployment directly supports RollingUpdate or Recreate.
+Blue-green and canary require additional release and routing arrangements,
+such as separate Deployments with Service or ingress routing or a progressive
+delivery controller. Replica ratios behind one Service give approximate
+distribution, not a guaranteed request percentage.
+
+I would choose based on blast radius, capacity, state compatibility, monitoring
+and recovery requirements. For every strategy, I would monitor errors, latency
+and meaningful business behavior, define when to stop, and verify recovery.
+None of the strategies automatically guarantees zero downtime.
+
+KEY POINT TO REMEMBER
+Rolling replaces instances; blue-green switches environments; canary limits exposure and learns from real traffic.

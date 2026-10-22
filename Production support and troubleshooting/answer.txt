@@ -1,0 +1,443 @@
+SECTION 1: PRODUCTION SUPPORT AND TROUBLESHOOTING
+Interview questions and detailed candidate answers
+
+Prepared for Prathamesh Hatkar
+
+HOW TO USE THIS FILE
+
+These are spoken-style answers to the original 10 questions in Section 1.
+Use them to understand the structure of a strong answer, then explain the ideas
+in your own words. For scenario questions, "I would" describes an approach; it
+does not claim that you have personally performed every action mentioned.
+
+Question 3 uses the OSI PI incident you described. Its preparation notes identify
+details you still need to supply. Do not invent incident duration, financial
+impact, recovery steps, results, or responsibilities.
+
+CORE APPROACH
+Confirm impact -> gather evidence -> isolate the cause -> restore service ->
+verify recovery -> investigate root cause and prevent recurrence.
+Communicate and document throughout the incident.
+
+
+QUESTION 1
+A production application suddenly becomes unavailable. How would you
+investigate and restore service?
+
+CANDIDATE ANSWER
+
+My first priority would be to confirm the impact and restore service safely.
+I would acknowledge the alert, check which application or component triggered
+it, and verify whether the entire application is unavailable or only specific
+endpoints or users are affected. I would look at availability checks, error
+rates, and the time the issue started. Based on the business impact, I would
+follow the incident process and involve the relevant teams early.
+
+Next, I would check recent changes: application deployments, configuration or
+secret updates, infrastructure changes, and changes to dependencies. A recent
+deployment is an important clue, but I would not automatically assume it is
+the cause.
+
+For an application running on Kubernetes, I would check workload and pod health,
+restart counts, events, and application logs. I would check whether the issue
+affects all replicas or a subset. I would also review resource usage and node
+health, then follow the request path through the ingress or gateway, Service,
+application, and dependencies such as the database.
+
+I would choose a mitigation based on the evidence. If a new release caused the
+failures, I would consider a rollback after checking that the previous version
+is compatible with the current configuration and database schema. If the issue
+is dependency availability or resource exhaustion, I would address that cause
+with the responsible team. I would capture useful evidence quickly without
+delaying recovery for an exhaustive investigation.
+
+Finally, I would verify real application requests, error rates, and monitoring
+to confirm recovery. I would update stakeholders, record the timeline, and
+complete an RCA with actions to prevent recurrence.
+
+KEY POINT TO REMEMBER
+Rollback is one possible mitigation. It should follow evidence, not be the
+automatic response to every outage.
+
+
+QUESTION 2
+A deployment succeeds, but users start receiving errors. How do you
+troubleshoot, and when would you roll back?
+
+CANDIDATE ANSWER
+
+I would first distinguish deployment success from application success. A
+pipeline can finish successfully and pods can be running while actual user
+requests fail. I would identify the affected endpoints, error messages or
+status codes, how many users are affected, and whether the errors started
+immediately after the release.
+
+I would compare the new release with the last working version. That includes
+the image version, application changes, environment variables, ConfigMaps,
+Secrets, deployment settings, and any database migrations. I would check pod
+readiness, events, restarts, application logs, and dependency connectivity.
+If containers are restarting, I would inspect the previous container logs as
+well as the current logs.
+
+I would trace a failed request where possible. An error on the first request
+could reveal a lazy initialization failure, missing configuration, an invalid
+credential, or a dependency problem that a basic health endpoint did not test.
+If only new replicas fail while older replicas work, that is useful evidence
+pointing toward the release or its configuration.
+
+If the impact is significant, evidence points to the new release, and a quick,
+well-understood fix is not available, I would prioritize restoring the known-good
+version. Before rollback, I would check schema and data compatibility. A code
+rollback may not be safe after an incompatible database migration; in that
+case, I would coordinate a compatible recovery or forward fix.
+
+After mitigation, I would verify the affected user flow and confirm that error
+rates and latency return to normal. I would then investigate why the issue
+escaped testing and improve deployment validation, readiness checks, or release
+tests as appropriate.
+
+KEY POINT TO REMEMBER
+State both your rollback decision criteria and how you verify recovery.
+
+
+QUESTION 3
+Describe a production incident you handled: impact, investigation, resolution,
+and prevention.
+
+CANDIDATE ANSWER BASED ON YOUR OSI PI EXAMPLE
+
+One incident involved an application that reads data from OSI PI. Processing
+runs were failing, and we investigated the failures to understand whether the
+problem was in the application input or the source system.
+
+I traced the failure to the part of the code making the request and identified
+the tag ID being used. I then checked whether that tag ID existed on the PI
+server. This helped us identify an invalid tag supplied by an operator as a
+failure scenario that could cause the processing run to fail.
+
+We also observed a separate scenario in which OSI PI itself was unavailable.
+That distinction mattered because invalid input and an unavailable source
+require different responses.
+
+To resolve the input-related failure, we deployed a quick fix to production
+using a feature branch. The change checked whether the PI tag existed on the
+PI server and sent the data request only if the tag existed.
+
+After deployment, we monitored the application logs for approximately 30 minutes
+to one hour. We checked that the same tag was handled without the application
+failing. This was our validation of the production fix.
+
+For source availability, we built a connection health-check application that
+sends an email alert when the OSI PI connection fails. The validation addressed
+invalid inputs, while the health check helped detect connectivity failures.
+
+The main lesson was to validate external input before processing and to monitor
+dependency availability separately. A health alert improves detection; it does
+not itself restore the unavailable source system.
+
+DETAILS TO ADD BEFORE USING THIS ANSWER
+
+- Impact: What downstream processing or users were affected? Use actual facts.
+- Ownership: Explain which investigation and implementation steps you performed
+  personally and which were performed by the team.
+
+POSSIBLE FOLLOW-UPS
+
+- Could one invalid tag fail the entire batch? What should the desired behavior be?
+- How did you distinguish an invalid tag from a permissions or connection error?
+- How often did the health check run, and how did you avoid repeated alert emails?
+- How did processing resume when OSI PI became available again?
+
+These follow-ups are preparation prompts, not claims about your implementation.
+
+
+QUESTION 4
+An application becomes slow without any recent deployment. What would you check?
+
+CANDIDATE ANSWER
+
+I would start by establishing the scope and timing of the slowdown. I would
+check whether all requests are slow or only certain endpoints, whether the
+problem affects all users, and how current latency compares with the normal
+baseline. I would look at high-percentile latency as well as averages so that
+a subset of very slow requests is not hidden.
+
+Next, I would correlate latency with request rate, concurrent requests, and
+resource usage. Increased traffic, expensive requests, CPU saturation, memory
+pressure, or exhausted worker threads can cause a slowdown without a release.
+I would also check recent configuration, infrastructure, or scheduled-job
+changes, because no deployment does not mean nothing changed.
+
+For memory, I would inspect the trend rather than assume high usage means a
+leak. Continuous growth that does not return toward normal could support that
+hypothesis. I would also check restarts, garbage-collection behavior if relevant,
+and available profiling evidence.
+
+Then I would inspect dependencies. For the database, I would check query
+latency, slow queries, locks, connection usage, and database resource pressure.
+For downstream APIs, I would check response times, failures, retries, and rate
+limits. Logs and request traces can help identify where the time is spent.
+
+I would select a mitigation based on the bottleneck. Scaling application
+replicas can help when the application is saturated by traffic, but it could
+make an overloaded database worse by increasing connections. Other mitigations
+might involve addressing a blocking query or controlling an expensive workload.
+
+I would verify that latency improves and identify the underlying capacity,
+application, or dependency issue before considering the incident resolved.
+
+KEY POINT TO REMEMBER
+Treat memory leaks as a hypothesis. Locate the bottleneck before choosing a fix.
+
+
+QUESTION 5
+How do you distinguish an application issue from a database, network, or
+infrastructure issue?
+
+CANDIDATE ANSWER
+
+I would follow an affected request through the system and identify where it
+fails or spends unexpected time. I would collect a timestamp, endpoint, error,
+and request ID, then correlate logs, metrics, and traces across the components.
+
+For an application issue, I would look for exceptions, validation failures,
+incorrect responses, thread exhaustion, and failures tied to a particular code
+path or application version. If dependencies respond normally but application
+processing fails, that supports investigating the application further.
+
+For a database issue, I would check connection errors, query execution time,
+locks, connection-pool exhaustion, permissions, and resource usage. A successful
+connection does not establish that the database is healthy. A query could still
+be blocked or take an unusually long time. A slow query may also originate from
+application behavior, so I would avoid assigning ownership prematurely.
+
+For a network issue, I would test DNS resolution and connectivity from the
+affected application's environment. I would investigate timeouts, connection
+refusals, TLS errors, routing, firewall rules, and Kubernetes network policies
+where relevant. Testing from my laptop alone would not reproduce the network
+path or identity used by the application.
+
+For infrastructure, I would inspect node or VM health, CPU and memory pressure,
+disk capacity and I/O, container restarts, and whether multiple unrelated
+applications on the same infrastructure are affected.
+
+I would use these findings to narrow the cause rather than treat the layers as
+independent boxes. For example, database connection exhaustion may result from
+an application connection leak or a traffic spike. I would involve the relevant
+owners with the evidence collected and coordinate service recovery.
+
+KEY POINT TO REMEMBER
+Reachable does not mean healthy. Use request-level evidence to isolate the issue.
+
+
+QUESTION 6
+What is the difference between incident resolution, a workaround, and
+root-cause analysis?
+
+CANDIDATE ANSWER
+
+Incident resolution means restoring normal service and verifying that the
+incident's impact has ended. My immediate focus during an incident would be
+safe recovery. I do not need to finish the entire RCA before restoring service.
+The incident may be detected by monitoring, by a user, or by another team; it
+does not have to start with a user raising a ticket.
+
+A workaround is an alternative or temporary measure that restores service or
+reduces impact without removing the underlying cause. For example, a controlled
+restart might temporarily recover an application affected by a memory leak.
+The application may work again, but the leak could cause the issue to return.
+A rollback or routing traffic away from an unhealthy instance can also be a
+workaround, depending on the cause and the final corrective action.
+
+Root-cause analysis investigates why the incident happened and which conditions
+allowed it to cause impact. I would use the timeline, logs, metrics, changes,
+and reproduction evidence to distinguish the trigger from the underlying cause
+and contributing factors. The outcome should include corrective and preventive
+actions with owners and target dates.
+
+Using the memory-leak example, recovery through a restart could resolve the
+active incident, while the workaround remains in place. The RCA would identify
+the leak and explain why monitoring or testing did not detect it earlier. A
+code fix and validation would address the cause, with monitoring improvements
+helping detect similar problems sooner.
+
+I would therefore track service restoration separately from the longer-term
+problem and prevention work, following the organization's process.
+
+KEY POINT TO REMEMBER
+Restoration can precede RCA. Resolving an incident does not always remove its cause.
+
+
+QUESTION 7
+How do you prioritize multiple incidents and decide when to escalate?
+
+CANDIDATE ANSWER
+
+I would prioritize incidents by business impact and urgency using the
+organization's severity definitions. I would consider affected users, critical
+business functions, financial impact, data integrity, and whether an acceptable
+workaround exists. I would also check whether the impact is growing and whether
+there are response or resolution targets at risk.
+
+I would not assign priority based only on the technical symptom. High latency
+can be critical if it causes timeouts across the application. A queue backlog
+can be critical if payment or business-critical messages are not being processed.
+A bug affecting a low-use feature with a workaround may have lower priority.
+
+If several alerts occur together, I would check whether they share a common
+dependency. A database outage might explain failures in several applications.
+Addressing that shared cause could restore multiple services more effectively
+than investigating each alert independently.
+
+For a major incident, I would escalate early to the incident lead and relevant
+technical teams while continuing investigation. I would also escalate when I
+need expertise, permissions, or a decision outside my authority, when progress
+stalls, when data loss is possible, or when an SLA target is approaching.
+
+My escalation would include the impact, start time, evidence, checks already
+performed, mitigation attempts, and the specific assistance needed. I would
+make ownership clear so that escalation does not become an untracked handoff.
+
+If multiple incidents require simultaneous work, I would coordinate parallel
+ownership rather than switch repeatedly between them. I would reassess priority
+as the impact and available evidence change.
+
+KEY POINT TO REMEMBER
+Business impact and urgency determine priority; symptom names alone do not.
+
+
+QUESTION 8
+What would you include in an RCA document?
+
+CANDIDATE ANSWER
+
+I would write the RCA so that someone who was not involved can understand what
+happened, why it happened, how service was recovered, and what will change.
+
+First, I would include a short incident summary with the affected service, time
+window, severity, and business impact. I would state which users or processes
+were affected and use verified measurements where available.
+
+Second, I would include a timeline covering the start of impact, detection,
+acknowledgment, major investigation findings, mitigation, recovery, and final
+verification. The timeline should use a consistent timezone.
+
+Third, I would explain the root cause and contributing factors, supported by
+logs, metrics, traces, configuration differences, or reproduction evidence. I
+would distinguish the trigger from the underlying weaknesses. For example, a
+deployment could trigger the outage, while missing configuration validation
+allowed an invalid setting into production.
+
+Fourth, I would summarize the investigation and recovery actions, including
+which hypotheses were tested, what mitigation worked, and how recovery was
+verified. I would note detection or response gaps, such as a missing alert or
+an incomplete runbook.
+
+Finally, I would list corrective and preventive actions. Each action should have
+an owner, a target date, and a clear completion or validation criterion. These
+might include a code fix, improved release checks, monitoring, documentation,
+or a tested recovery procedure.
+
+I would keep the analysis blameless and focused on system and process conditions.
+If the cause is still uncertain, I would state that explicitly and document
+the remaining investigation rather than present a hypothesis as fact.
+
+KEY POINT TO REMEMBER
+An RCA should result in specific, owned actions, not just a description of failure.
+
+
+QUESTION 9
+How would you investigate an intermittent issue that you cannot reproduce?
+
+CANDIDATE ANSWER
+
+I would treat the reported issue as valid and collect enough information to
+investigate the actual occurrence. I would ask for the timestamp and timezone,
+affected user or tenant, endpoint, input conditions, error message, and a
+request or correlation ID. I would handle any user data according to the
+organization's access and privacy requirements.
+
+I would use that time window and request ID to inspect application logs,
+traces, and dependency errors. I would compare failed requests with successful
+ones and look for patterns: a particular replica, application version, user
+group, payload size, operation, or peak-traffic period.
+
+Next, I would check transient conditions that might not exist when I test it.
+Examples include short resource spikes, exhausted connections, database locks,
+dependency timeouts, network failures, token expiry, or rate limits. If one
+replica is affected, I would compare its configuration and environment with
+healthy replicas.
+
+I would attempt reproduction in a controlled environment using the relevant
+conditions, such as similar input or concurrency. I would avoid creating extra
+production impact through uncontrolled tests.
+
+If current evidence is insufficient, I would add targeted observability where
+appropriate: structured logs, correlation IDs, timings around dependencies, or
+focused tracing. I would keep logging proportionate and avoid exposing secrets
+or sensitive payloads. I would arrange monitoring so the next occurrence
+captures useful evidence.
+
+I would document confirmed facts, hypotheses, impact, and next actions, with an
+owner for follow-up. I would escalate based on impact and findings. Being unable
+to reproduce it would not be a reason to declare the issue resolved.
+
+KEY POINT TO REMEMBER
+Use evidence from the original occurrence and improve capture for the next one.
+
+
+QUESTION 10
+How do you communicate status to developers, business stakeholders, and onshore
+teams during an outage?
+
+CANDIDATE ANSWER
+
+I would communicate early and keep a clear incident record. I would not wait
+for a full diagnosis or detailed RCA before sending the first update. The
+initial message would state the confirmed impact, affected service, when the
+issue was detected, that investigation is underway, and when the next update
+will be provided.
+
+I would maintain an incident ticket and use the agreed communication channel
+or incident bridge. Updates would follow the organization's cadence, with
+additional updates when the impact changes or a major mitigation is performed.
+Even without a fix, I would state what has been checked, what is happening next,
+and whether help is required.
+
+For developers and technical responders, I would share request IDs, relevant
+errors, affected versions, logs, recent changes, and the hypotheses being
+tested. I would make task ownership explicit to avoid duplicate or conflicting
+recovery actions.
+
+For business stakeholders, I would explain the affected business function,
+scope of impact, available workaround, and recovery progress in plain language.
+I would distinguish confirmed facts from suspected causes and avoid promising
+a recovery time without evidence. If the recovery time is unknown, I would say
+so and commit to the next update time.
+
+For an onshore handover, I would summarize the timeline, current impact,
+completed checks, actions taken, results, pending tasks, and current owners.
+I would confirm that the receiving team has accepted ownership rather than
+assume that sending a message completes the handover.
+
+Once service is restored, I would announce recovery after verifying user flows
+and monitoring. I would mention any remaining limitations and provide the RCA
+or follow-up actions through the agreed process.
+
+KEY POINT TO REMEMBER
+Early, accurate updates support recovery. The detailed RCA follows investigation.
+
+
+FINAL PRACTICE CHECK
+
+For every scenario, make sure you can explain:
+1. What is the impact?
+2. What evidence would I collect first?
+3. How would I distinguish possible causes?
+4. What recovery action would the evidence support?
+5. How would I verify recovery?
+6. Who needs an update or escalation?
+7. What would prevent recurrence?
+
+For experience questions, use your actual contribution and observed outcome.
+Avoid claiming an exact cause, recovery time, or improvement without evidence.

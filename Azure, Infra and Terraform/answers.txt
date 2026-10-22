@@ -1,0 +1,422 @@
+SECTION 4: AZURE, INFRASTRUCTURE, AND TERRAFORM
+Interview questions and detailed candidate answers
+
+Prepared for Prathamesh Hatkar
+
+HOW TO USE THIS FILE
+
+This section covers Questions 27-33 from the original interview preparation list.
+Answers are written in a candidate's voice. Use your actual project details
+for experience questions and explain proposed actions as "I would".
+
+Your known experience includes Azure Pipelines and Terraform automation,
+separate state files for resource deployments, Kubernetes, ACR, PostgreSQL,
+Redis, AI Search, Function Apps, AI services, and private endpoints across
+multiple environments. These notes do not assume all those resources belonged
+to one application or that every proposed design was implemented by you.
+
+Describe your professional Azure work separately from your local Kubernetes
+learning project. Do not present local emulation as a production Azure deployment.
+
+
+QUESTION 27
+Explain the architecture of an Azure application you supported, including
+networking, AKS, registry, databases, and secrets.
+
+CANDIDATE ANSWER
+
+My experience includes supporting Kubernetes applications and automating Azure
+infrastructure and deployments through Azure Pipelines and Terraform. I would
+explain one actual application, starting with its request flow and then the
+deployment, security, and monitoring paths.
+
+In an AKS-based architecture, application containers run as Kubernetes
+workloads, with Services providing stable access between components. The
+application's entry point could be an ingress controller or gateway, depending
+on the project's design. I would explain how requests reach that entry point,
+how host or path rules route them, and which components are exposed externally
+versus kept internal.
+
+ACR stores the application images. The build pipeline creates and publishes
+an image, and AKS pulls the approved version using an authorized identity or
+configured registry integration. I would distinguish the pipeline identity
+that pushes images from the runtime identity used to pull them.
+
+The application connects to dependencies such as PostgreSQL and Redis. In
+projects that use private endpoints, I would explain the private connectivity
+and DNS path for each supported dependency. I would identify which resources
+are managed Azure services and which, if any, run inside Kubernetes. A private
+AKS API endpoint and private endpoints for application dependencies solve
+different access problems and should not be confused.
+
+For secrets, I would describe the actual Key Vault or secret-management
+integration. Applications should use scoped identities and permissions rather
+than hardcoded credentials. Network reachability does not replace application
+authentication and authorization.
+
+For infrastructure, Terraform declares resources and Azure Pipelines executes
+the approved provisioning process. Separate state files let us manage selected
+resource lifecycles independently, although dependencies still need explicit
+coordination. For operations, I would explain the real logs, metrics, alerts,
+and deployment verification used by the team.
+
+I would finish by describing my contribution: which resources or pipelines
+I implemented, what I maintained, and one troubleshooting or automation outcome.
+
+DETAILS TO PERSONALIZE
+
+- The actual entry point: ingress, Istio, Application Gateway, or another option.
+- Public versus private access for users, the AKS API, registry, and dependencies.
+- Actual subnets, DNS arrangements, and outbound connectivity.
+- Which service identity accessed each dependency.
+- The actual database offering and how it was reached.
+- Your real monitoring and secret-management tools.
+
+KEY POINT TO REMEMBER
+Explain a coherent request flow and your own contribution. Do not list every
+Azure service you have used as though it belongs to the same architecture.
+
+
+QUESTION 28
+An application in AKS cannot connect to a database through a private endpoint.
+How would you investigate?
+
+CANDIDATE ANSWER
+
+I would first identify the exact failure: DNS resolution, a connection timeout,
+a connection refusal, TLS negotiation, authentication, or a database-level
+permission error. Those symptoms help narrow the layer involved. I would
+collect the database hostname, port, affected pod, timestamp, and error while
+avoiding exposure of credentials.
+
+I would test from the affected application's environment or an approved
+diagnostic environment with a comparable network path. A successful connection
+from my laptop would not establish that the pod has the same DNS, routing,
+identity, or access permissions.
+
+First, I would resolve the normal database hostname and check that its DNS
+chain leads to the expected private address. I would inspect the appropriate
+private DNS zone records and VNet links, or the custom DNS resolver and
+forwarding arrangement. I would not blindly replace the hostname with an IP,
+because that can break TLS hostname validation and bypass the intended design.
+
+Next, I would verify that the private endpoint connection is approved and
+provisioned for the correct resource and service subresource. I would inspect
+the endpoint network interface and confirm that the private address matches
+the DNS result.
+
+Then I would test TCP connectivity to the database port and investigate the
+effective network path. Relevant checks include VNet peering where applicable,
+routes, firewalls, NSGs where applicable, endpoint-subnet policy settings, and
+Kubernetes NetworkPolicies. If a service mesh governs the application's
+outbound traffic, I would check its configuration too. A generic assumption
+that every packet is governed by every NSG would not replace checking the
+actual effective path.
+
+If networking works, I would check the database's service health, TLS settings,
+credentials or token acquisition, database permissions, and connection limits.
+Private connectivity alone does not grant database access. I would also verify
+the application's connection string and whether a recent secret change reached
+the running workload.
+
+After correcting the failing layer, I would test a real query from the
+application and monitor errors. I would preserve private connectivity rather
+than casually enable public access as a troubleshooting shortcut.
+
+USEFUL DIAGNOSTIC IDEAS
+
+- Inspect the application's actual connection error first.
+- Resolve the database FQDN from the pod's network/DNS context.
+- Test the expected TCP port using approved diagnostic tooling.
+- Review private endpoint connection status and DNS configuration.
+- Review network controls relevant to the actual packet path.
+- Test authentication and a simple database operation after connectivity works.
+
+KEY POINT TO REMEMBER
+Follow the layers: DNS -> endpoint and route -> TCP -> TLS -> authentication
+and authorization -> database operation.
+
+
+QUESTION 29
+How do you manage configuration and infrastructure differences across
+environments?
+
+CANDIDATE ANSWER
+
+I would keep a common application artifact and reusable infrastructure modules,
+while making environment differences explicit through reviewed configuration.
+The objective is consistency without pretending that development and production
+have identical capacity, access requirements, or availability needs.
+
+For Terraform, I would use modules for reusable resource definitions and
+environment-specific root configurations or variable files for values such
+as names, location, sizing, network references, and feature settings. I would
+keep environment state isolated so an operation against development cannot
+silently target production state. Terraform workspaces can separate state in
+some workflows, but they do not by themselves provide a complete security or
+environment isolation boundary.
+
+Credentials and sensitive values should come from the approved identity or
+secret-management system, not be committed to ordinary variable files. I would
+restrict pipeline identities and backend access so each job has the scope it
+needs. I would make the selected environment visible and validate inputs to
+reduce the chance of applying a plan to the wrong destination.
+
+For Kubernetes, I would use an appropriate configuration approach such as Helm
+values or Kustomize overlays, depending on the team's tooling. Environment
+differences could include replica count, resource settings, hostnames, and
+dependency endpoints. Secrets would be managed through the approved secure
+integration. Application environment variables are generally read at process
+startup, so changing their source configuration typically requires a rollout.
+
+The release pipeline would promote the same image version or digest across
+environments, run the relevant validation, and require the approved production
+review or approval steps. For infrastructure, I would review a plan for the
+specific environment and apply the reviewed plan when the workflow supports it.
+
+Finally, I would monitor drift and document intentional differences. An urgent
+manual fix should be reflected back into the declared configuration; otherwise,
+a later Terraform apply or GitOps sync may undo it.
+
+KEY POINT TO REMEMBER
+Reuse modules and artifacts; isolate state, identities, and configuration;
+make environment selection and differences explicit.
+
+
+QUESTION 30
+How do managed identities, service principals, RBAC, and Key Vault fit into
+deployment automation?
+
+CANDIDATE ANSWER
+
+I would separate identity, permission, secret storage, and network access.
+Identity establishes who the workload is. RBAC or another authorization model
+determines what it can do. Key Vault stores and controls access to secrets,
+keys, and certificates. Networking determines whether the endpoint is reachable.
+
+A service principal represents an application identity in a Microsoft Entra
+tenant. Automation can authenticate as that application through an appropriate
+mechanism, such as a secret, certificate, or federated identity. I would avoid
+long-lived client secrets when a supported short-lived or federated approach
+is available.
+
+A managed identity is an Azure-managed identity for a supported resource or
+workload integration. Azure manages its credentials, so the application does
+not need to store and rotate a client secret itself. System-assigned identities
+are tied to their resource lifecycle, while user-assigned identities are
+separate resources that can be associated with supported workloads.
+
+For an Azure Pipelines deployment, I would use the organization's approved
+service connection. Where supported and configured, workload identity
+federation can allow authentication without a stored client secret. I would
+grant its identity only the required permissions at the narrowest practical
+scope, and distinguish infrastructure provisioning from application deployment
+permissions if their responsibilities differ.
+
+For an AKS application, I would consider the configured workload identity
+integration so a Kubernetes service account can be associated with an Entra
+identity through federation. The application must use compatible identity
+configuration and libraries; enabling a cluster feature alone does not give
+every pod access to Azure resources.
+
+For Key Vault, I would grant the application or pipeline the specific data
+access it needs. Permission to manage a vault does not necessarily grant
+permission to read its secrets. Access may be governed by Azure RBAC or a
+vault access-policy model, depending on the setup. If the vault is private,
+the calling workload also needs working private DNS and network reachability.
+
+I would avoid printing secret values, keep them out of Git and artifacts,
+and rotate or revoke exposed credentials. I would also distinguish Azure RBAC
+from Kubernetes RBAC: permission to manage an AKS resource is not automatically
+the same as permission to modify workloads through its Kubernetes API.
+
+KEY POINT TO REMEMBER
+Identity answers "who"; authorization answers "what actions"; Key Vault protects
+sensitive material; network access is a separate requirement.
+
+
+QUESTION 31
+What is Terraform state? How do you secure it, handle locking, and manage drift?
+
+CANDIDATE ANSWER
+
+Terraform state records the relationship between configuration resource
+instances and the real infrastructure objects Terraform manages. It stores
+identifiers and attributes that Terraform uses, together with provider reads
+and configuration, to work out planned changes. It is not simply a log file
+and is not the same thing as the Terraform source configuration.
+
+State can contain sensitive information, including resource attributes or
+values that are not obvious from the configuration. Marking a variable or
+output sensitive mainly controls display; it does not guarantee that the
+value is absent from state or plan files. I would therefore protect state
+and saved plans as sensitive artifacts.
+
+For collaboration, I would use a supported remote backend with restricted
+access and appropriate protection. In an Azure setup, that can be Azure Blob
+Storage with suitable identity-based access, encryption, recovery settings,
+and network controls. I would avoid committing state or state backups to Git
+and separate backend permissions from general repository access.
+
+Locking prevents concurrent Terraform operations from modifying the same state
+at the same time when supported by the backend. The Azure backend uses blob
+leasing for locking. I would also coordinate pipeline concurrency. A lock on
+one state file does not coordinate operations against different states or
+guarantee consistency across their dependencies.
+
+If a lock appears stuck, I would first confirm that no active operation owns
+it. I would investigate the pipeline or process before considering force-unlock
+through the team's recovery procedure. Removing a valid active lock could
+allow conflicting writes.
+
+For drift, I would use controlled plans to compare declared configuration with
+the infrastructure observed by the provider. I would decide whether an external
+change should be adopted into configuration or reverted through Terraform.
+A refresh-only operation updates state to reflect observed changes; it does
+not itself make the configuration match or restore the intended infrastructure.
+
+Finally, I would maintain recoverable state history and a documented recovery
+process, and avoid manual state editing except through carefully reviewed
+state operations when necessary.
+
+KEY POINT TO REMEMBER
+Protect state and plans, coordinate concurrent operations, and reconcile drift
+deliberately. Hiding a secret in CLI output does not remove it from state.
+
+
+QUESTION 32
+Why did you use separate Terraform state files for different resources?
+What are the benefits and tradeoffs?
+
+CANDIDATE ANSWER
+
+In my Terraform and Azure Pipelines work, we used separate state files for
+resource deployments so their creation and deletion could be managed
+independently. This helped avoid coupling every resource operation to one
+large state and gave the team more control over the lifecycle of individual
+deployments.
+
+The main benefit is a smaller scope for each plan and apply. Changes are
+easier to review because the plan focuses on the selected deployment. Backend
+access and pipeline permissions can also be scoped where the architecture
+requires it. Operations against different independent states do not contend
+for the same state lock.
+
+However, separate state is not complete isolation. A database, private endpoint,
+and application may still depend on the same network or resource group.
+Destroying a shared resource can affect infrastructure tracked in other states.
+For example, deleting a resource group can affect its child resources even
+if those children are represented in separate state files.
+
+Terraform builds its dependency graph within a configuration and state
+operation. Dependencies between separate root deployments require coordination.
+I would manage prerequisites and ordering through the deployment workflow and
+pass required identifiers through an approved mechanism. Reading remote-state
+outputs is one option, but it requires careful access control because access
+to a state snapshot can expose more than the intended output values.
+
+There is also operational overhead: more backend keys, root configurations,
+plans, and recovery paths. A change spanning several states is not atomic,
+so I would plan for partial completion and reruns. I would not create one
+state for every tiny resource without considering that cost.
+
+My design rule would be to split state around ownership, lifecycle, security,
+and change boundaries. I would use separate state where it provides meaningful
+control, while documenting shared dependencies and protecting destructive
+operations. I would describe our exact split and why it suited the team.
+
+KEY POINT TO REMEMBER
+Smaller state reduces the scope of Terraform operations; it does not remove
+real infrastructure dependencies or make deletion automatically safe.
+
+
+QUESTION 33
+A Terraform apply partially fails. How would you inspect the result and
+recover safely?
+
+CANDIDATE ANSWER
+
+I would first confirm that the operation has finished or failed, preserve its
+logs, and identify the first meaningful provider or API error. Terraform apply
+is not a transaction that automatically rolls back every completed resource
+change. Some resources may already have been created or updated, and state
+may already record those successful operations.
+
+I would inspect both Terraform's state and the actual Azure resources. I would
+check which operations succeeded, which failed, and whether the cloud API still
+has an asynchronous operation in progress. The provider error could relate to
+permissions, policy, quotas, naming conflicts, invalid input, networking, or
+an API timeout. I would address the specific cause rather than immediately
+destroy everything or delete state.
+
+After the cause is corrected, I would run a fresh plan against the current
+configuration, state, and observed infrastructure. I would review unexpected
+deletions or replacements carefully. If the plan is appropriate, I would apply
+it through the approved workflow. Terraform can often continue from successful
+prior operations, but I would verify that the observed plan matches that
+expectation rather than assume a rerun is harmless.
+
+If a resource exists in Azure but is missing from state, I would investigate
+why before deciding to import it into the correct resource address. I would
+not blindly recreate or delete it. A state write failure is a separate recovery
+case: I would preserve any recovery state produced and follow the backend
+recovery procedure before another apply, so an older remote snapshot does
+not cause misleading plans.
+
+I would also check locks and avoid force-unlocking while another operation
+is active. If recovery needs a state change, I would protect the current
+snapshot and use a reviewed procedure. Targeted operations are an exceptional
+tool, not the default fix, because they can leave other intended changes
+unapplied; a full plan is needed afterward.
+
+Finally, I would verify the affected services and dependent deployments,
+record what succeeded and how recovery was completed, and improve validation
+or prerequisite checks where the failure was preventable.
+
+USEFUL COMMANDS
+
+terraform state list
+terraform plan
+
+Inspecting state with terraform state show can expose sensitive attributes.
+Use it only in an appropriate environment and do not paste unredacted output
+into shared tickets or interview notes.
+
+For a reviewed fresh saved plan, a typical workflow is:
+terraform plan -out=recovery.tfplan
+terraform apply recovery.tfplan
+
+Saved plan files may contain sensitive data. Protect them and do not reuse
+an old plan as a substitute for reviewing the post-failure state.
+
+KEY POINT TO REMEMBER
+Apply is not an atomic transaction. Inspect state and reality, correct the
+cause, review a fresh plan, and recover without blind deletion or state changes.
+
+
+FINAL PRACTICE CHECK
+
+Be able to explain these distinctions without notes:
+
+1. A private AKS API versus a private endpoint for an application dependency.
+2. DNS resolution versus network reachability versus database authorization.
+3. A pipeline identity versus an application's runtime identity.
+4. Azure resource management permissions versus service data access permissions.
+5. Azure RBAC versus Kubernetes RBAC.
+6. A managed identity versus an application identity using a stored client secret.
+7. Terraform configuration versus state versus a saved plan.
+8. Sensitive display masking versus sensitive data actually stored in state.
+9. State isolation versus infrastructure dependency isolation.
+10. A lock on one state versus coordination across multiple deployments.
+11. A refresh-only operation versus changing configuration or infrastructure.
+12. A failed apply versus an automatic rollback.
+
+EXPERIENCE STORIES TO PREPARE
+
+- Your Azure Pipelines and Terraform deployment process with separate states.
+- One concrete example of a private connectivity or permissions problem.
+- How you protected pipeline credentials and Terraform state in your actual setup.
+- A Kubernetes or infrastructure change you implemented and verified.
+
+Use real details and outcomes. If you have not handled a scenario personally,
+explain your troubleshooting approach instead of inventing an incident.

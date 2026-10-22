@@ -1,0 +1,644 @@
+SECTION 5: PYTHON, LINUX, NETWORKING, AND MONITORING
+Interview questions and detailed candidate answers
+
+Prepared for Prathamesh Hatkar
+
+HOW TO USE THIS FILE
+
+This section covers Questions 34-40 from the original preparation list.
+The answers describe how you would approach each scenario. Adapt them to your
+experience rather than claim you implemented every example professionally.
+
+Python examples use the standard library. Code is included for interview
+practice and can be copied into a .py file. Replace example inputs before use.
+Diagnostic commands are examples for authorized environments, not commands
+that have been executed against your infrastructure.
+
+
+QUESTION 34
+Write a Python script that checks multiple application health endpoints and
+reports failures, with timeouts and exception handling.
+
+CANDIDATE ANSWER
+
+I would put the health-check logic in a function that accepts a name, URL,
+and timeout, then returns a structured result. I would distinguish an HTTP
+error response from a connection or timeout failure. I would also measure
+elapsed time so the report includes slow responses as well as failures.
+
+For a small number of endpoints, a sequential implementation is easy to
+explain. For more endpoints, I could use a bounded thread pool because most
+of the time is spent waiting for network I/O. I would avoid unbounded threads
+or uncontrolled request rates.
+
+I would define what healthy means for each endpoint. A 2xx status may be
+enough for a simple probe, but a real readiness endpoint may require checking
+the response content. A redirect to a login page should not be mistaken for
+application health. Authentication details should come from a secure source
+and should not be printed in the report.
+
+The script would report failures and exit with a nonzero status if any check
+fails, allowing a scheduler or pipeline to detect the result. For a recurring
+monitor, I would add alert deduplication, repeated-failure thresholds, and
+recovery notifications so one transient error does not flood email.
+
+EXAMPLE SCRIPT
+
+import json
+import socket
+import time
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+
+def check_endpoint(name, url, timeout=5):
+    started = time.monotonic()
+    result = {"name": name, "healthy": False, "status": None}
+
+    try:
+        request = Request(url, headers={"User-Agent": "health-check/1.0"})
+        with urlopen(request, timeout=timeout) as response:
+            result["status"] = response.status
+            result["healthy"] = 200 <= response.status < 300
+            if not result["healthy"]:
+                result["error"] = "Unexpected HTTP status"
+
+    except HTTPError as exc:
+        result["status"] = exc.code
+        result["error"] = "HTTP error"
+        exc.close()
+    except (TimeoutError, socket.timeout):
+        result["error"] = "Request timed out"
+    except URLError as exc:
+        result["error"] = "Connection, DNS, or TLS failure"
+        result["error_type"] = type(exc.reason).__name__
+    except OSError as exc:
+        result["error"] = "Network I/O failure"
+        result["error_type"] = type(exc).__name__
+
+    result["duration_ms"] = round((time.monotonic() - started) * 1000, 2)
+    return result
+
+
+def main():
+    endpoints = [
+        ("api", "https://api.example.com/health"),
+        ("worker-api", "https://worker.example.com/health"),
+    ]
+    results = [check_endpoint(name, url) for name, url in endpoints]
+    print(json.dumps(results, indent=2))
+    return 0 if all(item["healthy"] for item in results) else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+EXPLAIN THE CODE
+
+- time.monotonic measures elapsed duration without depending on wall-clock changes.
+- HTTPError means the server returned an HTTP error status; it is caught before
+  URLError because HTTPError is a subclass of URLError.
+- URLError can wrap DNS, connection, TLS, and some timeout failures.
+- The context manager closes a successful response.
+- Exceptions are handled per endpoint so one failure does not skip other checks.
+- This example follows redirects. Add an explicit redirect/final-URL policy
+  and response validation when redirects could conceal a failed health check.
+- The timeout is not a strict end-to-end deadline for the entire program;
+  DNS and multiple network operations can affect actual elapsed time.
+- The script reports exceptions without logging URLs that might contain secrets.
+
+KEY POINT TO REMEMBER
+Timeouts, meaningful health criteria, per-endpoint errors, and usable exit
+codes matter more than simply sending a GET request.
+
+
+QUESTION 35
+A Linux server has high CPU, high memory usage, or a full disk. How would
+you investigate each?
+
+CANDIDATE ANSWER
+
+I would first confirm the affected host, the time the issue started, and the
+application impact. I would compare current usage with its normal baseline
+and look for recent traffic, scheduled tasks, configuration, or deployment
+changes. I would identify the resource bottleneck before restarting anything.
+
+HIGH CPU
+
+I would use top or a similar tool to identify busy processes and, where needed,
+busy threads. I would look at CPU usage over time, runnable processes, and
+whether time is spent in user work, kernel work, or waiting on I/O. Load
+average alone is not CPU utilization; on Linux it also includes tasks in
+uninterruptible sleep, often associated with I/O.
+
+I would correlate the process with request volume and application logs.
+Possible causes include an expensive code path, a tight loop, excessive
+concurrency, garbage collection, or a background job. In a containerized
+environment, I would also check CPU throttling rather than rely only on
+host-level CPU utilization.
+
+HIGH MEMORY
+
+I would inspect available memory, swap activity, and process resident memory.
+Low free memory alone is not proof of trouble because Linux uses memory for
+caches. I would look for low available memory, sustained swapping, OOM events,
+and application impact. A growing memory trend may suggest a leak, while a
+short spike may correlate with workload size or concurrency.
+
+FULL DISK
+
+I would check which filesystem is full and whether the problem is space or
+inode exhaustion. I would inspect the relevant mount's large directories,
+logs, temporary files, and application output. If df reports much more usage
+than visible files suggest, I would check for deleted files still held open.
+Those files continue using space until the process releases them.
+
+I would recover safely: fix an expensive workload, add capacity where justified,
+or rotate and remove approved disposable files. I would not blindly delete
+database files, persistent volumes, or active logs. After mitigation, I would
+verify application recovery and address retention, sizing, or code issues.
+
+USEFUL COMMANDS
+
+# Run on the affected Linux host or in the appropriate workload context.
+# Replace <PID> and <service> with the process ID and systemd unit you identify.
+# Compare several samples with normal behavior and application latency/errors.
+
+CPU AND PROCESSES
+
+# Show 1-, 5-, and 15-minute load averages and whether load is growing.
+# Load includes runnable work and uninterruptible tasks; it is not CPU percent.
+uptime
+
+# Show available processing units as context for runnable load.
+# Container quotas and affinity can differ from the host's apparent capacity.
+nproc
+
+# Live CPU/process view: us = user, sy = kernel, id = idle, wa = I/O wait,
+# st = CPU time taken by the hypervisor from this virtual machine.
+# In top, press P to sort by CPU, M by memory, and 1 to show individual CPUs.
+# High user CPU suggests app work; high system CPU needs kernel/I/O context.
+# One busy core can limit a single-threaded workload while total CPU looks low.
+top
+
+# Rank processes by CPU; RSS is resident memory in KiB.
+# ps %CPU is a process-lifetime average, not an interval measurement like top.
+# Shared resident pages can appear in multiple processes; do not sum RSS blindly.
+ps -eo pid,comm,%cpu,%mem,rss --sort=-%cpu
+
+# Inspect threads of the busy process to find the thread consuming CPU.
+# Next: correlate the process/thread with requests, jobs, logs or approved profiling.
+top -H -p <PID>
+
+# Where sysstat is installed: sample this process's CPU every second, five times.
+# Distinguish sustained utilization from a short burst before choosing a fix.
+pidstat -u -p <PID> 1 5
+
+MEMORY AND SWAP
+
+# Read available memory, cache and swap, not just the free column.
+# Low free memory can be normal caching. Correlate low available memory with
+# sustained swapping, OOM evidence and application impact before claiming pressure.
+free -h
+
+# Rank large resident-memory consumers; RSS is in KiB, and %MEM may reflect host RAM.
+# Repeated growth at comparable load merits leak investigation; one sample is not proof.
+ps -eo pid,comm,%mem,rss --sort=-rss
+
+# Five samples one second apart: r = runnable tasks, b = blocked tasks,
+# si/so = swap-in/swap-out rates; us/sy/id/wa/st describe CPU time.
+# The first report's CPU/rate fields cover time since boot; later reports cover
+# the interval. Sustained si/so plus latency can indicate memory pressure.
+# Blocked tasks or elevated wa suggest I/O checks, not a specific disk diagnosis.
+vmstat 1 5
+
+# Where sysstat is installed: sample this process's RSS and page-fault activity.
+# Major faults may involve disk access; correlate with swap, workload and latency.
+pidstat -r -p <PID> 1 5
+
+DISK SPACE AND INODES
+
+# Find the full filesystem: inspect Size, Used, Avail, Use% and the mount point.
+# Capacity usage is different from disk I/O utilization or latency.
+df -h
+
+# Check inode usage: many small files can exhaust inodes while bytes remain available.
+# Next: identify the directory/workload before changing its retention policy.
+df -i
+
+# Display human-readable usage one directory level below /var.
+# -x stays on one filesystem; -h formats sizes; -d1 limits displayed depth.
+# Replace /var with the affected mount/path. Descendants are still scanned,
+# so narrow the path to avoid extra I/O. Permissions can limit the reported totals.
+du -xhd1 /var
+
+DISK I/O AND ERROR EVIDENCE
+
+# Where sysstat is installed: extended device I/O, one-second intervals, five reports.
+# Inspect read/write rates, await (request latency including queue time), queue depth
+# and %util together. The first report normally covers time since boot.
+# High %util alone is not a universal saturation test for parallel SSD/NVMe/RAID.
+iostat -xz 1 5
+
+# Where sysstat is installed: correlate this process's disk activity with device symptoms.
+# Use it to narrow down the application or job behind a busy device.
+pidstat -d -p <PID> 1 5
+
+# List open files whose link count is below one: deleted/unlinked but still open.
+# Inspect PID, file and size when df usage exceeds visible files. Permissions matter.
+# Space is retained until the process releases the file. Coordinate supported log
+# reopening/rotation or recovery; do not kill a process blindly.
+lsof +L1
+
+# On systemd hosts, inspect recent kernel logs for OOM kills, I/O and filesystem errors.
+# An OOM event is stronger evidence than a high-memory sample alone.
+journalctl -k --since "30 minutes ago"
+
+# Inspect the affected service's logs over the same incident window.
+# Correlate timestamps with utilization, request changes, errors and restarts.
+journalctl -u <service> --since "30 minutes ago" --no-pager
+
+Some tools require extra packages or permissions. Scope disk scans to the
+relevant filesystem; broad scans create additional I/O. These are Linux command
+examples, not commands executed on this Windows workspace.
+
+AFTER THE CHECKS
+
+- High CPU: identify the busy process/thread, compare traffic and jobs, then
+  investigate expensive code or container throttling before choosing mitigation.
+- Memory pressure: correlate available memory, sustained swap, RSS trends and
+  OOM events. A restart can restore service temporarily without fixing a leak.
+- Full filesystem: distinguish exhausted bytes, inodes and deleted-open files.
+  Use approved retention/rotation or justified capacity changes; protect app data.
+- Slow disk: correlate device latency/queues with process I/O and app latency.
+  A full disk and an I/O-saturated disk are different failure conditions.
+- After mitigation: repeat relevant samples and a real application request.
+  Confirm recovery, then document the cause and prevention work.
+
+
+KEY POINT TO REMEMBER
+Distinguish high utilization from actual pressure, and choose mitigation using
+process-level and application evidence.
+
+
+QUESTION 36
+Write a Python script to parse application logs and count errors by type
+or time interval.
+
+CANDIDATE ANSWER
+
+I would first confirm the log format and define the aggregation required.
+Structured JSON logs are easier to parse reliably than arbitrary text.
+For a large file, I would process one line at a time rather than load the
+entire file into memory.
+
+For each line, I would parse the record, select ERROR entries, validate the
+timestamp, normalize it to a consistent timezone, and count occurrences by
+error type and time bucket. I would handle malformed records separately so
+one bad line does not terminate the entire analysis. I would also avoid
+printing full sensitive payloads in the summary.
+
+The example below expects one JSON object per line, with timestamp, level,
+and error_type fields. It produces counts by error type and UTC minute.
+For a very long time range or high-cardinality error field, I would bound the
+analysis window or aggregate into a suitable external system because the
+counter still uses memory proportional to the number of distinct groups.
+
+EXAMPLE SCRIPT
+
+import json
+from collections import Counter
+from datetime import datetime, timezone
+
+
+def summarize_errors(path):
+    counts = Counter()
+    invalid_records = 0
+
+    with open(path, encoding="utf-8") as log_file:
+        for line in log_file:
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+                if not isinstance(record, dict):
+                    raise ValueError("Expected a JSON object")
+                if str(record.get("level", "")).upper() != "ERROR":
+                    continue
+
+                raw_timestamp = record["timestamp"]
+                if not isinstance(raw_timestamp, str):
+                    raise ValueError("Expected a timestamp string")
+                if raw_timestamp.endswith("Z"):
+                    raw_timestamp = raw_timestamp[:-1] + "+00:00"
+
+                timestamp = datetime.fromisoformat(raw_timestamp)
+                if timestamp.utcoffset() is None:
+                    raise ValueError("Timestamp must include a timezone")
+
+                minute = timestamp.astimezone(timezone.utc).replace(
+                    second=0, microsecond=0
+                )
+                error_type = record.get("error_type", "UNKNOWN")
+                if not isinstance(error_type, str):
+                    raise ValueError("Expected an error type string")
+                counts[(minute.isoformat(), error_type)] += 1
+
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                invalid_records += 1
+
+    return counts, invalid_records
+
+
+if __name__ == "__main__":
+    counts, invalid = summarize_errors("application.jsonl")
+    for (minute, error_type), count in sorted(counts.items()):
+        print(f"{minute} | {error_type} | {count}")
+    print(f"Invalid or unparseable records: {invalid}")
+
+SAMPLE INPUT LINE
+
+{"timestamp":"2026-10-15T12:30:45+00:00","level":"ERROR","error_type":"DB_TIMEOUT","message":"Query timed out"}
+
+FOLLOW-UP POINTS
+
+- File-open and permission errors should fail clearly or be handled at the CLI
+  boundary; they should not be silently treated as an empty log.
+- Missing timezone information is rejected rather than guessed.
+- Aggregating by a normalized error category avoids grouping by every unique
+  exception message, request ID, or user ID.
+- For plain-text logs, first define a stable format and a suitable parser.
+
+KEY POINT TO REMEMBER
+Stream the input, validate records, normalize time, and report malformed data.
+
+
+QUESTION 37
+How would you implement retries in an automation script? Which failures
+should you avoid retrying?
+
+CANDIDATE ANSWER
+
+I would retry failures only when another attempt has a reasonable chance of
+succeeding and repeating the operation is safe. Examples include some transient
+connection failures, selected service-unavailable errors, and rate limiting.
+I would use a maximum attempt count, a per-attempt timeout, and an overall
+time budget, with exponential backoff and jitter to avoid many clients
+retrying together.
+
+I would respect a valid Retry-After response when supported, within the allowed
+time budget. I would record attempts and the final outcome without logging
+secrets. The caller needs a clear failure after the retry policy is exhausted.
+
+I would not retry invalid input, a missing required configuration value, or a
+permission failure without changing the underlying condition. Authentication
+failures may need a controlled token refresh rather than blindly repeating
+the same bad credential. Certificate validation failures need investigation,
+not retries with verification disabled.
+
+I would pay particular attention to idempotency. A read operation is usually
+safer to repeat than a request that creates a resource, sends an email, or
+charges a customer. If a request times out after reaching the server, I may
+not know whether it succeeded. For writes, I would use a supported idempotency
+key or check the operation's status before repeating it. A retry can otherwise
+create duplicates.
+
+The exact retryable status codes depend on the service and operation. I would
+not retry every 5xx response indiscriminately or assume every connection error
+means the server performed no work. I would also avoid retrying at every layer,
+because nested policies can multiply requests and overload an unhealthy service.
+
+ILLUSTRATIVE RETRY HELPER
+
+import random
+import time
+
+
+class TransientError(Exception):
+    pass
+
+
+def run_with_retry(operation, attempts=4, base_delay=0.5, max_delay=5):
+    if attempts < 1 or base_delay < 0 or max_delay < 0:
+        raise ValueError("Invalid retry configuration")
+
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except TransientError:
+            if attempt == attempts - 1:
+                raise
+            ceiling = min(max_delay, base_delay * (2 ** attempt))
+            time.sleep(random.uniform(0, ceiling))
+
+The operation must classify retryable errors and set its own timeout.
+This small helper does not implement Retry-After or a strict overall deadline;
+those are additional requirements for a production implementation.
+
+KEY POINT TO REMEMBER
+Retries require transient failure classification, safe repetition, and bounds.
+They are not a substitute for fixing an invalid request or unavailable capacity.
+
+
+QUESTION 38
+How do you investigate DNS resolution failures, connection timeouts,
+connection refusals, and TLS certificate errors?
+
+CANDIDATE ANSWER
+
+I would identify the exact error and test from the environment where the
+application fails. The same hostname may resolve differently on a laptop,
+inside a cluster, or through a private network. I would check the intended
+hostname, port, protocol, proxy configuration, and recent changes first.
+
+For DNS failures, I would verify the configured resolver and inspect the
+hostname's records. I would distinguish a nonexistent name from a resolver
+timeout or server failure. In Kubernetes, I would check whether the expected
+Service name and namespace are correct, whether cluster DNS is healthy, and
+whether policies allow the required DNS traffic. For private cloud endpoints,
+I would check private DNS zone linkage or forwarding as applicable.
+
+A connection timeout means the connection did not complete within the configured
+time. Possible causes include a dropped packet, blocked route, firewall,
+unreachable destination, or severe service pressure. I would test the relevant
+TCP port and inspect the actual route and network controls. A timeout alone
+does not prove which device or component is responsible.
+
+A connection refusal often means the destination or an intermediate component
+actively rejected the connection. I would check the address and port, whether
+the service is listening, and whether it is bound to a reachable interface.
+In Kubernetes, I would also check the Service targetPort and ready endpoints.
+A rejection can also come from a firewall or proxy, so I would not assume it
+always originates in the application.
+
+For TLS errors, I would inspect the certificate chain, hostname match, expiry,
+trust store, SNI, and system time. If mutual TLS is used, I would also check
+client certificates and policy. I would repair trust or certificate deployment
+rather than disable verification as the fix.
+
+Finally, I would verify the full application request. DNS and TCP success do
+not establish that HTTP, authentication, and downstream processing work.
+
+USEFUL COMMANDS
+
+getent hosts <hostname>
+dig <hostname>
+nc -vz -w 5 <hostname> <port>
+curl -v --connect-timeout 5 --max-time 15 https://<hostname>/health
+openssl s_client -connect <hostname>:443 -servername <hostname> -showcerts
+ss -lntp
+
+Availability and flags vary by system. Use commands in the relevant network
+context. curl verbose output and certificate diagnostics can reveal sensitive
+headers or infrastructure details, so redact before sharing. openssl s_client
+is useful for inspection; its output alone should not be treated as proof that
+normal application certificate verification succeeds.
+
+KEY POINT TO REMEMBER
+Separate DNS, transport connection, TLS, and application behavior. Avoid using
+ping alone as proof that a service is accessible.
+
+
+QUESTION 39
+What do HTTP 401, 403, 404, 500, 502, 503, and 504 suggest during troubleshooting?
+
+CANDIDATE ANSWER
+
+I would use the HTTP status as a clue, then identify which component returned
+it. The response might come from a gateway, authentication proxy, application,
+or downstream service. I would correlate the request with logs and traces
+rather than assume the status proves a single root cause.
+
+401 UNAUTHORIZED
+The request lacks valid authentication credentials for the resource. I would
+check whether the token or credential is present, expired, malformed, or
+issued for the wrong audience or issuer. Despite the status name, this is
+primarily an authentication problem. I would not print the token in logs.
+
+403 FORBIDDEN
+The server understands the request but refuses it. I would check authorization,
+roles, policies, resource access, and restrictions at the responding component.
+It often indicates insufficient permission, but I would not assume it proves
+successful authentication in every implementation; a WAF or other policy layer
+can also return it.
+
+404 NOT FOUND
+The resource or route is not found, or the server is unwilling to disclose
+that it exists. I would check the hostname, path, API version, route matching,
+and resource identifier. An ingress default route can return 404 even when
+the application itself is healthy.
+
+500 INTERNAL SERVER ERROR
+The server encountered an unexpected condition. I would inspect application
+exceptions, request traces, and dependency failures. This status alone does
+not identify the failing line of code or prove that infrastructure is healthy.
+
+502 BAD GATEWAY
+A gateway or proxy received an invalid response from an upstream server.
+I would inspect upstream connection/protocol errors, unexpected connection
+closure, and gateway logs. The precise mapping depends on the proxy.
+
+503 SERVICE UNAVAILABLE
+The service is temporarily unable to handle the request. I would check ready
+backends, overload, maintenance behavior, dependency health, and the component
+generating the response. In Kubernetes, a gateway with no usable backends may
+return 503, depending on its implementation. I would inspect Retry-After if
+present and retry only when safe.
+
+504 GATEWAY TIMEOUT
+A gateway did not receive a timely upstream response. I would compare the
+gateway timeout with upstream latency and trace the request through application
+and database work. Increasing the timeout may only hide the bottleneck, so I
+would investigate why the upstream is slow before changing it.
+
+KEY POINT TO REMEMBER
+Status codes narrow the investigation. Identify the responder and use evidence
+before assigning the issue to a team or layer.
+
+
+QUESTION 40
+Which metrics and alerts would you configure for an application? How would
+you reduce noisy alerts?
+
+CANDIDATE ANSWER
+
+I would start with what users depend on: successful requests and acceptable
+response times for important operations. I would monitor request rate, error
+rate, latency distributions, and saturation. I would use high-percentile
+latency where appropriate because an average can hide a poor experience for
+some users, and I would distinguish expected client errors from service failures.
+
+I would add workload metrics relevant to the architecture. For Kubernetes,
+that includes ready versus desired replicas, restarts, OOM events, scheduling
+failures, CPU throttling, and memory pressure. For the database, I would monitor
+query latency, connection usage, locks, and availability. For queues, I would
+check backlog age, depth, arrival rate, processing rate, and failed messages.
+A growing queue is meaningful in relation to throughput and business deadlines.
+
+For a GenAI application, useful additional signals include model-call latency,
+API errors and rate limits, token usage, retrieval latency, and the success of
+important user flows. Operational availability and answer quality are different
+dimensions; quality evaluation needs its own appropriate measurements.
+
+In a Prometheus and Grafana setup, Prometheus collects metrics and evaluates
+configured alert rules, Alertmanager can group and route notifications, and
+Grafana provides dashboards. Other deployments may use Grafana-managed alerting
+or a different alerting stack, so I would explain the actual implementation.
+
+To reduce noise, I would alert on actionable user impact or a credible risk
+to it. I would use sensible evaluation windows, minimum traffic requirements,
+and thresholds based on a baseline or service objective. A single failed
+request or brief CPU spike should not automatically page someone. Sustained
+or fast-growing failures may need different urgency levels.
+
+I would group related alerts, inhibit secondary notifications when a known
+parent failure explains them, deduplicate repeated notifications, and use
+time-limited silences for planned maintenance. Every important alert should
+have a clear owner, severity, dashboard, and runbook. I would regularly review
+alerts that nobody acts on and confirm that monitoring detects recovery too.
+
+I would avoid high-cardinality metric labels such as unrestricted user IDs,
+request IDs, or raw URLs. Those details usually belong in appropriately
+controlled logs and traces rather than unbounded metric series.
+
+IMPORTANT TERMS
+
+SLI: A measured indicator of service behavior, such as the proportion of
+eligible requests completed successfully.
+
+SLO: The internal target for an SLI over a defined window, such as a chosen
+availability or latency objective. Define exactly what is measured and excluded.
+
+SLA: An agreement with customers or stakeholders that defines commitments and
+may define consequences. It is not interchangeable with an internal SLO.
+
+Error budget: The amount of unreliability permitted by the SLO over its window.
+Burn-rate alerts measure how quickly that budget is being consumed and can
+help distinguish urgent sustained impact from a short harmless fluctuation.
+
+KEY POINT TO REMEMBER
+Page on actionable impact, support diagnosis with resource metrics, and give
+every alert an owner and a response path.
+
+
+FINAL PRACTICE CHECK
+
+1. Why should every outbound request have a timeout?
+2. Why does a timeout after a write not prove the write failed?
+3. Why use monotonic time for elapsed duration?
+4. Why process a large log file line by line?
+5. What is the difference between low free and low available memory?
+6. How can a filesystem be full when file sizes appear small?
+7. What does a connection refusal suggest compared with a timeout?
+8. Why must network tests run in the affected workload's environment?
+9. Which component actually produced an HTTP error response?
+10. Why is a growing queue not always the same severity in every system?
+11. What makes an alert actionable?
+12. How do an SLI, SLO, and SLA differ?
+
+LINK TO YOUR EXPERIENCE
+
+Your OSI PI example can support a discussion of dependency health checks,
+input validation, and alerting. Explain what your actual monitor checked,
+how often it ran, and how failures were reported. Do not claim retry policies,
+deduplication, or metrics that you did not implement.

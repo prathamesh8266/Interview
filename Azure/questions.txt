@@ -1,0 +1,233 @@
+Prathamesh, for your KPIT L1 discussion tomorrow, October 22, prepare to explain how Azure services work together, how you secure them, and how you troubleshoot failures.
+
+Below is a broad 150-question preparation bank, tailored to your Azure, Terraform, AKS, and DevSecOps experience. These are preparation questions, not a verified KPIT question list.
+
+★ = prepare this first tonight. For each starred question, aim for a clear 60–90-second answer and one practical example.
+
+1. Azure fundamentals and resource organization
+1. ★ Explain the Azure architecture of your current project. What did you personally implement?
+2. What is the difference between IaaS, PaaS, and SaaS? Give Azure examples.
+3. Explain the relationship between a tenant, management group, subscription, resource group, and resource.
+4. What is the difference between an Azure region and an availability zone?
+5. What are availability sets? Explain fault domains and update domains.
+6. Can resources in one resource group exist in different regions?
+7. Does placing resources in separate resource groups isolate their network traffic?
+8. How would you separate development, testing, and production environments?
+9. What are resource providers, quotas, and service limits?
+10. What are resource tags and resource locks? When would you use them?
+
+2. Networking fundamentals
+11. ★ What is a VNet, what is a subnet, and how do you plan their address spaces?
+12. Explain CIDR. How many addresses are in a /24 subnet, and how many are usable in Azure?
+13. What happens if two VNets have overlapping address spaces?
+14. ★ How do two VMs in different subnets of the same VNet communicate? Is peering required?
+15. What is a NIC? How do private and public IP addresses relate to it?
+16. ★ What is an NSG? Explain inbound rules, outbound rules, priorities, and default rules.
+17. What happens when NSGs are attached to both the subnet and the VM NIC?
+18. What does it mean that an NSG is stateful?
+19. What are application security groups and service tags?
+20. ★ What are system routes and user-defined routes? How does Azure select a route?
+21. ★ What does NAT Gateway do? Can it accept unsolicited inbound connections?
+22. How would you let a VM without a public IP download packages from the internet?
+23. What is VNet peering? Is peering transitive?
+24. Compare VNet peering, VPN Gateway, and ExpressRoute.
+25. Compare Azure Firewall, NSG, WAF, and Azure Bastion.
+
+3. Private connectivity and DNS
+26. ★ What problem does a private endpoint solve?
+27. What is the difference between Azure Private Link and a private endpoint?
+28. ★ Compare a service endpoint and a private endpoint.
+29. What gets created when you create a private endpoint? Does the underlying PaaS service move into your VNet?
+30. ★ A VM is in subnet A and a Storage private endpoint is in subnet B. Explain the complete connection flow.
+31. ★ What happens during DNS resolution when an application accesses Storage through a private endpoint?
+32. What is an Azure Private DNS zone? What does a VNet link do?
+33. Does linking a Private DNS zone to a VNet place that zone inside a subnet?
+34. ★ Does creating a private endpoint automatically disable the service’s public access?
+35. How would a peered VNet or an on-premises server resolve and access a private endpoint?
+
+4. Load balancing, ingress, and application delivery
+36. ★ Compare Azure Load Balancer, Application Gateway, Front Door, and Traffic Manager.
+37. What is the difference between Layer 4 and Layer 7 load balancing?
+38. Compare a public load balancer and an internal load balancer.
+39. What are a frontend IP, backend pool, load-balancing rule, and health probe?
+40. Does Azure Load Balancer inspect URL paths or provide least-connections routing?
+41. ★ Trace a request from a user through DNS, Azure networking, AKS ingress, and finally an application pod.
+42. Why might an application need both an Azure Load Balancer and an ingress controller?
+43. What is TLS termination? How is it different from end-to-end TLS?
+44. What does a WAF protect against? Where would you enable it?
+45. ★ An application returns 502 Bad Gateway. How would you identify the failing component?
+
+5. Compute: VMs, scale sets, App Service, and Functions
+46. ★ When would you choose a VM, App Service, Azure Functions, Container Apps, or AKS?
+47. What factors determine which VM size you select?
+48. Compare vertical scaling and horizontal scaling.
+49. What are VM Scale Sets? How would you configure autoscaling?
+50. What is the difference between stopping a VM inside the OS and deallocating it?
+51. Which costs can continue after a VM is deallocated?
+52. Compare OS disks, data disks, and temporary disks.
+53. ★ How would you troubleshoot an unreachable VM?
+54. ★ How would you investigate high CPU, memory pressure, or disk latency on a VM?
+55. How would you patch VMs while maintaining application availability?
+56. What is an App Service Plan? Can multiple applications share one?
+57. What are App Service deployment slots? How do swaps support safer releases?
+58. ★ What is the difference between App Service VNet integration and an App Service private endpoint?
+59. What are Azure Functions triggers and bindings? What causes a cold start?
+60. How do retries, timeouts, and idempotency affect a Function that processes messages?
+
+6. AKS and ACR
+61. ★ What does Azure manage in AKS, and what remains your responsibility?
+62. What are system and user node pools? Why separate them?
+63. Compare public and private AKS clusters. How would you administer a private cluster?
+64. What is the purpose of the AKS node resource group?
+65. ★ Explain how AKS authenticates to ACR to pull an image. Which identity and permissions are involved?
+66. ★ How would you troubleshoot ImagePullBackOff?
+67. ★ How would you troubleshoot a pod in Pending, CrashLoopBackOff, or OOMKilled state?
+68. Compare ClusterIP, NodePort, LoadBalancer, and ExternalName services.
+69. Explain the relationship between an ingress resource, ingress controller, and Kubernetes Service.
+70. ★ Compare readiness, liveness, and startup probes.
+71. What is the difference between HPA and cluster autoscaler? How do requests and limits affect them?
+72. ★ Walk through an AKS upgrade, including preparation, node draining, surge capacity, and validation.
+73. How do PodDisruptionBudgets, replica counts, and topology spreading help during maintenance?
+74. ★ How can an AKS pod access Key Vault or Storage without embedding credentials?
+75. How would you secure an AKS cluster across identity, networking, images, secrets, and workload permissions?
+
+7. Storage
+76. ★ Compare Blob Storage, Azure Files, and managed disks.
+77. What is the difference between a storage account, container, and blob?
+78. Compare block blobs, append blobs, and page blobs.
+79. Compare hot, cool, cold, and archive access tiers. What are the retrieval trade-offs?
+80. ★ Compare LRS, ZRS, GRS, and GZRS. What do the read-access variants add?
+81. How would you select redundancy for production data?
+82. ★ Compare account keys, SAS tokens, and Microsoft Entra authentication.
+83. What is a user delegation SAS? Why should SAS permissions and validity be restricted?
+84. ★ How would you make a storage account accessible only from approved workloads?
+85. ★ An application receives 403 when accessing Blob Storage. What would you check?
+86. What are soft delete, versioning, lifecycle policies, and immutable storage?
+87. What does the hierarchical namespace add in Azure Data Lake Storage Gen2?
+
+8. Databases and caching
+88. ★ Compare Azure SQL Database, SQL Managed Instance, SQL Server on a VM, and Azure Database for PostgreSQL.
+89. What responsibilities remain with you when using a managed database?
+90. ★ How would AKS connect securely to PostgreSQL using private connectivity?
+91. Compare PostgreSQL private access through VNet integration with Private Link connectivity.
+92. ★ How would you troubleshoot a database connection timeout?
+93. How would your investigation differ for a timeout versus an authentication failure?
+94. ★ How would you investigate slow queries or high database CPU?
+95. What is connection pooling? How can application scaling exhaust database connections?
+96. Compare high availability, read replicas, backups, and point-in-time restore.
+97. What are RPO and RTO? How do they influence database design?
+98. What is Cosmos DB? Explain partition keys, request units, and consistency levels.
+99. When would you introduce Redis caching? Explain TTL, cache-aside, and a cache stampede.
+
+9. Identity, RBAC, and governance
+100. ★ Explain authentication versus authorization using an Azure example.
+101. What is Microsoft Entra ID? How does it differ from traditional Active Directory Domain Services?
+102. ★ Compare a user, group, application registration, service principal, and managed identity.
+103. ★ Compare system-assigned and user-assigned managed identities.
+104. ★ What three components make up an Azure role assignment?
+105. Explain RBAC scopes and permission inheritance.
+106. ★ Compare Owner, Contributor, Reader, and User Access Administrator.
+107. ★ Why might a storage account Contributor still be unable to read blobs using Entra authentication?
+108. What are Actions, DataActions, and custom roles?
+109. What is the difference between Azure resource roles and Microsoft Entra directory roles?
+110. ★ Compare Azure RBAC and Azure Policy.
+111. What are Policy effects such as Audit, Deny, Modify, and DeployIfNotExists?
+112. What are PIM, MFA, and Conditional Access? What problems do they address?
+
+10. Key Vault and security
+113. ★ What belongs in Key Vault? Compare secrets, keys, and certificates.
+114. ★ Explain how an application uses managed identity to retrieve a Key Vault secret.
+115. How do you secure Key Vault across network access and identity permissions?
+116. What are Key Vault soft delete, purge protection, and secret rotation?
+117. ★ A workload receives 403 from Key Vault. How would you troubleshoot it?
+118. Compare encryption at rest, encryption in transit, platform-managed keys, and customer-managed keys.
+119. What does Microsoft Defender for Cloud provide? How does it differ from Microsoft Sentinel?
+120. ★ Where would you integrate SAST, SCA, container scanning, IaC scanning, and DAST into delivery pipelines?
+
+11. Monitoring, troubleshooting, backup, and DR
+121. ★ Compare Azure Monitor, Log Analytics, and Application Insights.
+122. Compare metrics, logs, and distributed traces.
+123. What is a diagnostic setting? Where can resource logs and metrics be sent?
+124. How do Activity Log, Resource Health, and Service Health differ?
+125. ★ Design alerts for application availability, error rate, latency, resource saturation, and certificate expiry.
+126. ★ Users report a slow application, but CPU is normal. How would you investigate?
+127. What would you use KQL for? Describe a useful query you could write.
+128. ★ How would you distinguish a DNS problem, routing problem, blocked port, authentication failure, and application failure?
+129. Compare backup, high availability, and disaster recovery.
+130. How would you test restoration and regional failover without relying only on a successful backup status?
+
+12. Integration and external services
+131. ★ Compare Service Bus, Storage Queues, Event Grid, and Event Hubs.
+132. What are Service Bus queues, topics, subscriptions, and dead-letter queues?
+133. How do you handle duplicate messages, poison messages, retries, and message ordering?
+134. ★ What does API Management provide? How does it differ from Application Gateway?
+135. How would you securely call an external API while managing credentials, rate limits, timeouts, and retries?
+136. When would you use Logic Apps rather than Functions? What are connectors and API connections?
+137. What are Azure AI Search and Azure OpenAI used for? How would you secure their access?
+
+13. Terraform and Azure DevOps
+138. ★ Explain your Terraform architecture, including modules, environments, state storage, and deployment order.
+139. ★ Why use remote state? How do Azure Blob state locking and access controls work?
+140. What are the benefits and trade-offs of separate state files? How do you manage dependencies?
+141. ★ How do you authenticate an Azure Pipeline to Azure securely? Explain service connections and workload identity federation.
+142. ★ How does a self-hosted agent receive jobs, and how can it reach private Azure resources?
+143. Explain plan, apply, import, drift, and recovery from a partially failed deployment.
+144. How do you secure state and secrets, approve production changes, scan artifacts, and roll back an application release?
+14. Scenarios and questions based on your experience
+145. ★ Design a secure three-tier Azure application with public web access and a private database. Explain every connection.
+146. ★ After public access is disabled on Storage or Key Vault, a pipeline fails. How would you restore the intended connectivity?
+147. ★ An application worked before a private endpoint was introduced and now times out. Walk through your investigation.
+148. ★ Describe a Kubernetes upgrade you performed: your exact role, risks, issues, and validation.
+149. ★ Explain a Terraform or pipeline improvement you implemented. What measurable effort or risk did it reduce?
+150. ★ Describe a production incident: impact, immediate mitigation, diagnosis, permanent fix, and prevention.
+
+Common traps to get right
+
+These distinctions will help you handle follow-up questions confidently:
+Topic	Accurate answer to remember
+Private endpoint	It provides a private network interface and IP for accessing a supported service. It does not move that service into your subnet.
+Public access after creating a private endpoint	Review and configure public access separately; creating the endpoint alone does not necessarily close public access.
+Private DNS zone	It is linked to VNets for resolution; it does not sit inside a subnet.
+Private network connectivity	It supplies a network path. The application still needs valid authentication and authorization.
+
+
+Microsoft’s Private Link and Storage documentation explain these endpoint and access distinctions. Microsoft Learn
+Topic	Accurate answer to remember
+Azure Load Balancer	Layer 4 traffic distribution; URL-based routing belongs to an application-layer component.
+Application Gateway	Regional application-layer web traffic handling.
+Front Door	Global application-layer delivery and routing.
+Traffic Manager	DNS-based routing; application requests do not pass through it as a proxy.
+
+
+These are different tools with different traffic-handling models. Azure Architecture Center
+Topic	Accurate answer to remember
+Contributor	Can manage resources but generally cannot assign Azure roles.
+Resource management access	Does not automatically grant every data-plane permission.
+Role assignment	Principal + role definition + scope.
+RBAC	Determines what an identity is authorized to do.
+Azure Policy	Evaluates and enforces resource configuration rules.
+
+
+Be especially clear about resource management permissions versus permissions to read secrets or blob data. learn.microsoft.com
+
+One current networking detail: do not assume a newly created VM automatically has outbound internet access. New VNets created using API versions released after March 31, 2026 default to private subnets; plan an explicit outbound method such as NAT Gateway. Existing VNets are not automatically changed by that default. Virtual Network
+
+How to prepare tonight
+
+If you have approximately four hours, use this order:
+Time	Preparation
+60 minutes	Networking, routing, NSGs, private endpoints, DNS, load balancing
+40 minutes	Managed identities, RBAC, Key Vault, Policy
+45 minutes	AKS, ACR, upgrades, workload troubleshooting
+35 minutes	Storage, databases, compute choices
+30 minutes	Terraform, pipelines, monitoring, integration services
+30 minutes	Explain your architecture aloud and practice three incident scenarios
+
+
+For concept questions, answer using what it is → when you use it → how you used it.
+
+For troubleshooting, use scope and impact → recent changes → evidence → isolate the failing layer → mitigate → validate.
+
+Your strongest preparation will be explaining one real architecture, one AKS upgrade, one Terraform automation, and one incident in enough detail to handle follow-up questions. Use actual numbers and outcomes you can defend.
+
+
